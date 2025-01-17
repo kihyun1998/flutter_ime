@@ -20,10 +20,6 @@ abstract class FlutterImePlatform extends PlatformInterface {
     _instance = instance;
   }
 
-  Future<String?> getPlatformVersion() {
-    throw UnimplementedError('platformVersion() has not been implemented.');
-  }
-
   /// IME를 영문 상태로 변경
   Future<void> setEnglishKeyboard() async {
     throw UnimplementedError('setEnglishKeyboard() must be implemented');

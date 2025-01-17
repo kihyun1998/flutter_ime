@@ -8,9 +8,6 @@ class MockFlutterImePlatform
     with MockPlatformInterfaceMixin
     implements FlutterImePlatform {
   @override
-  Future<String?> getPlatformVersion() => Future.value('42');
-
-  @override
   Future<bool> isEnglishKeyboard() => Future<bool>.value(true);
 
   @override
@@ -24,14 +21,6 @@ void main() {
       '$FlutterImePlatform has the default instance : $MethodChannelFlutterIme',
       () {
     expect(initialPlatform, isInstanceOf<MethodChannelFlutterIme>());
-  });
-
-  test('getPlatformVersion', () async {
-    FlutterIme flutterImePlugin = FlutterIme();
-    MockFlutterImePlatform fakePlatform = MockFlutterImePlatform();
-    FlutterImePlatform.instance = fakePlatform;
-
-    expect(await flutterImePlugin.getPlatformVersion(), '42');
   });
 
   test('Test Platform Interface Mock', () async {

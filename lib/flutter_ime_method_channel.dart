@@ -10,13 +10,6 @@ class MethodChannelFlutterIme extends FlutterImePlatform {
   final methodChannel = const MethodChannel('flutter_ime');
 
   @override
-  Future<String?> getPlatformVersion() async {
-    final version =
-        await methodChannel.invokeMethod<String>('getPlatformVersion');
-    return version;
-  }
-
-  @override
   Future<void> setEnglishKeyboard() async {
     await methodChannel.invokeMethod<void>('setEnglishKeyboard');
   }

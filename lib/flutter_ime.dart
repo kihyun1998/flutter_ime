@@ -23,8 +23,4 @@ class FlutterIme {
 
     return FlutterImePlatform.instance.isEnglishKeyboard();
   }
-
-  Future<String?> getPlatformVersion() {
-    return FlutterImePlatform.instance.getPlatformVersion();
-  }
 }
