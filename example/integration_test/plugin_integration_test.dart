@@ -6,11 +6,9 @@
 // For more information about Flutter integration tests, please see
 // https://flutter.dev/to/integration-testing
 
-
+import 'package:flutter_ime/flutter_ime.dart';
 import 'package:flutter_test/flutter_test.dart';
 import 'package:integration_test/integration_test.dart';
-
-import 'package:flutter_ime/flutter_ime.dart';
 
 void main() {
   IntegrationTestWidgetsFlutterBinding.ensureInitialized();
@@ -21,5 +19,16 @@ void main() {
     // The version string depends on the host platform running the test, so
     // just assert that some non-empty string is returned.
     expect(version?.isNotEmpty, true);
+  });
+
+  testWidgets('setEnglishKeyboard test', (WidgetTester tester) async {
+    final FlutterIme plugin = FlutterIme();
+
+    // set ime english
+    await plugin.setEnglishKeyboard();
+
+    // check status
+    final isEnglish = await plugin.isEnglishKeyboard();
+    expect(isEnglish, true);
   });
 }

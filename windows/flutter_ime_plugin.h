@@ -1,4 +1,4 @@
-#ifndef FLUTTER_PLUGIN_FLUTTER_IME_PLUGIN_H_
+﻿#ifndef FLUTTER_PLUGIN_FLUTTER_IME_PLUGIN_H_
 #define FLUTTER_PLUGIN_FLUTTER_IME_PLUGIN_H_
 
 #include <flutter/method_channel.h>
@@ -24,6 +24,11 @@ class FlutterImePlugin : public flutter::Plugin {
   void HandleMethodCall(
       const flutter::MethodCall<flutter::EncodableValue> &method_call,
       std::unique_ptr<flutter::MethodResult<flutter::EncodableValue>> result);
+
+  // IME 관련 유틸리티 함수들
+  bool SetEnglishKeyboard();
+  bool IsEnglishKeyboard();
+
 };
 
 }  // namespace flutter_ime
