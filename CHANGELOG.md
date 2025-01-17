@@ -1,3 +1,5 @@
-## 0.0.1
+## 1.0.0
 
-* TODO: Describe initial release.
+* Initial release 
+* Windows IME English switching function
+* IME status checking function
