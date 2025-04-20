@@ -23,3 +23,5 @@ flutter:
     platforms:
       windows:
         pluginClass: FlutterImePluginCApi
+      macos:
+        pluginClass: FlutterImePlugin
