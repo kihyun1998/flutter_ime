@@ -1,3 +1,7 @@
+## 1.0.2
+
+* update: update license 
+
 ## 1.0.1
 
 * Lower SDK constraint to >=3.0.0
