@@ -17,7 +17,7 @@ Add this to your package's `pubspec.yaml` file:
 
 ```yaml
 dependencies:
-  flutter_ime: ^1.1.0
+  flutter_ime: ^2.0.0
 ```
 
 ## Usage
@@ -25,14 +25,11 @@ dependencies:
 ```dart
 import 'package:flutter_ime/flutter_ime.dart';
 
-// Create an instance
-final flutterIme = FlutterIme();
-
 // Switch to English keyboard
-await flutterIme.setEnglishKeyboard();
+await setEnglishKeyboard();
 
 // Check if current keyboard is English
-bool isEnglish = await flutterIme.isEnglishKeyboard();
+bool isEnglish = await isEnglishKeyboard();
 ```
 
 ### Automatic Password Field Example
@@ -44,17 +41,16 @@ class LoginPage extends StatefulWidget {
 }
 
 class _LoginPageState extends State<LoginPage> {
-  final _flutterIme = FlutterIme();
   final _passwordFocusNode = FocusNode();
 
   @override
   void initState() {
     super.initState();
-    
+
     // Switch to English keyboard when password field gets focus
     _passwordFocusNode.addListener(() {
       if (_passwordFocusNode.hasFocus) {
-        _flutterIme.setEnglishKeyboard();
+        setEnglishKeyboard();
       }
     });
   }

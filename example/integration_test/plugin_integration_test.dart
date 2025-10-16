@@ -14,13 +14,11 @@ void main() {
   IntegrationTestWidgetsFlutterBinding.ensureInitialized();
 
   testWidgets('setEnglishKeyboard test', (WidgetTester tester) async {
-    final FlutterIme plugin = FlutterIme();
-
     // set ime english
-    await plugin.setEnglishKeyboard();
+    await setEnglishKeyboard();
 
     // check status
-    final isEnglish = await plugin.isEnglishKeyboard();
+    final isEnglish = await isEnglishKeyboard();
     expect(isEnglish, true);
   });
 }

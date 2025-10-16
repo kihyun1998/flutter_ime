@@ -24,14 +24,13 @@ void main() {
   });
 
   test('Test Platform Interface Mock', () async {
-    FlutterIme flutterImePlugin = FlutterIme();
     MockFlutterImePlatform fakePlatform = MockFlutterImePlatform();
     FlutterImePlatform.instance = fakePlatform;
 
     // test setEnglishKeyboard
-    await flutterImePlugin.setEnglishKeyboard();
+    await setEnglishKeyboard();
 
     // tes isEnglishKeyboard
-    expect(await flutterImePlugin.isEnglishKeyboard(), true);
+    expect(await isEnglishKeyboard(), true);
   });
 }

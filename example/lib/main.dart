@@ -29,7 +29,6 @@ class LoginPage extends StatefulWidget {
 }
 
 class _LoginPageState extends State<LoginPage> {
-  final _flutterIme = FlutterIme();
   final _emailController = TextEditingController();
   final _passwordController = TextEditingController();
   final _passwordFocusNode = FocusNode();
@@ -42,13 +41,13 @@ class _LoginPageState extends State<LoginPage> {
     // 비밀번호 필드가 포커스를 받으면 영어 키보드로 변경
     _passwordFocusNode.addListener(() {
       if (_passwordFocusNode.hasFocus) {
-        _flutterIme.setEnglishKeyboard();
+        setEnglishKeyboard();
       }
     });
   }
 
   Future<void> _checkKeyboardStatus() async {
-    final isEnglish = await _flutterIme.isEnglishKeyboard();
+    final isEnglish = await isEnglishKeyboard();
     setState(() {
       _keyboardStatus = isEnglish ? 'English' : 'Non-English';
     });

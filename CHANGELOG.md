@@ -1,3 +1,8 @@
+## 2.0.0
+
+* **BREAKING**: Refactor to top-level functions (removed FlutterIme class)
+* Simplified API: Call `setEnglishKeyboard()` directly without instantiation
+
 ## 1.1.0
 
 * Add macOS support
