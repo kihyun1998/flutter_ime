@@ -33,6 +33,7 @@ class _LoginPageState extends State<LoginPage> {
   final _emailController = TextEditingController();
   final _passwordController = TextEditingController();
   final _passwordFocusNode = FocusNode();
+  String _keyboardStatus = 'Unknown';
 
   @override
   void initState() {
@@ -43,6 +44,13 @@ class _LoginPageState extends State<LoginPage> {
       if (_passwordFocusNode.hasFocus) {
         _flutterIme.setEnglishKeyboard();
       }
+    });
+  }
+
+  Future<void> _checkKeyboardStatus() async {
+    final isEnglish = await _flutterIme.isEnglishKeyboard();
+    setState(() {
+      _keyboardStatus = isEnglish ? 'English' : 'Non-English';
     });
   }
 
@@ -89,6 +97,16 @@ class _LoginPageState extends State<LoginPage> {
                 // 로그인 처리 로직
               },
               child: const Text('로그인'),
+            ),
+            const SizedBox(height: 16),
+            OutlinedButton(
+              onPressed: _checkKeyboardStatus,
+              child: const Text('현재 키보드 상태 확인'),
+            ),
+            const SizedBox(height: 8),
+            Text(
+              'Keyboard: $_keyboardStatus',
+              style: Theme.of(context).textTheme.titleMedium,
             ),
           ],
         ),

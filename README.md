@@ -1,15 +1,15 @@
 # flutter_ime
 
-A Flutter plugin for controlling Windows IME (Input Method Editor) state. This plugin helps you manage keyboard input modes in Windows applications, particularly useful for login forms and password fields where English input is preferred.
+A Flutter plugin for controlling IME (Input Method Editor) state. This plugin helps you manage keyboard input modes in Windows and macOS applications, particularly useful for login forms and password fields where English input is preferred.
 
 [![pub package](https://img.shields.io/pub/v/flutter_ime.svg)](https://pub.dev/packages/flutter_ime)
 
 ## Features
 
-* Switch to English keyboard mode programmatically on Windows
+* Switch to English keyboard mode programmatically on Windows and macOS
 * Check current keyboard input mode
 * Automatic IME mode switching for password fields
-* Pure Windows API implementation with no external dependencies
+* Native API implementation (Windows IMM32, macOS Carbon)
 
 ## Getting started
 
@@ -17,7 +17,7 @@ Add this to your package's `pubspec.yaml` file:
 
 ```yaml
 dependencies:
-  flutter_ime: ^1.0.3
+  flutter_ime: ^1.1.0
 ```
 
 ## Usage
@@ -77,11 +77,13 @@ class _LoginPageState extends State<LoginPage> {
 ### Platform Support
 
 * Windows - ✅ Fully supported
+* macOS - ✅ Fully supported
 * Other platforms - ❌ Not supported
 
 ### Requirements
 
-* Windows 7 or later
+* Windows 7 or later (for Windows)
+* macOS 10.10 or later (for macOS)
 * Flutter SDK 3.0.0 or later
 
 ## License

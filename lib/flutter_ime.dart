@@ -6,9 +6,9 @@ import 'flutter_ime_platform_interface.dart';
 class FlutterIme {
   /// Change IME > English
   ///
-  /// Only use in Windows
+  /// Supported platforms: Windows, macOS
   Future<void> setEnglishKeyboard() async {
-    if (!Platform.isWindows) return;
+    if (!Platform.isWindows && !Platform.isMacOS) return;
 
     await FlutterImePlatform.instance.setEnglishKeyboard();
   }
@@ -17,9 +17,9 @@ class FlutterIme {
   ///
   /// Returns:
   /// - true: is English
-  /// - false: is not english or not windows
+  /// - false: is not english or not supported platform
   Future<bool> isEnglishKeyboard() async {
-    if (!Platform.isWindows) return false;
+    if (!Platform.isWindows && !Platform.isMacOS) return false;
 
     return FlutterImePlatform.instance.isEnglishKeyboard();
   }

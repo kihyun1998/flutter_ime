@@ -1,6 +1,6 @@
 name: flutter_ime
-description: "Windows IME(Input Method Editor) controller for Flutter. Provides functionality to switch between Korean and English input modes."
-version: 1.0.3
+description: "IME(Input Method Editor) controller for Flutter. Supports Windows and macOS. Provides functionality to switch between Korean and English input modes."
+version: 1.1.0
 homepage: "https://github.com/kihyun1998/flutter_ime"
 repository: https://github.com/kihyun1998/flutter_ime
 
