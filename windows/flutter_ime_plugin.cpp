@@ -4,7 +4,7 @@
 #include <windows.h>
 #include <imm.h>
 
-// IMM32 라이브러리 링크
+// Link IMM32 library
 #pragma comment(lib, "imm32.lib")
 
 #include <VersionHelpers.h>
@@ -18,7 +18,7 @@
 
 namespace flutter_ime {
 
-// Static 멤버 초기화
+// Static member initialization
 FlutterImePlugin* FlutterImePlugin::instance_ = nullptr;
 WNDPROC FlutterImePlugin::original_wndproc_ = nullptr;
 bool FlutterImePlugin::ime_disabled_ = false;
@@ -39,7 +39,7 @@ void FlutterImePlugin::RegisterWithRegistrar(
         plugin_pointer->HandleMethodCall(call, std::move(result));
       });
 
-  // EventChannel 설정
+  // Setup EventChannel
   plugin->event_channel_ =
       std::make_unique<flutter::EventChannel<flutter::EncodableValue>>(
           registrar->messenger(), "flutter_ime/input_source_changed",
@@ -62,7 +62,7 @@ void FlutterImePlugin::RegisterWithRegistrar(
 
   plugin->event_channel_->SetStreamHandler(std::move(event_handler));
 
-  // Caps Lock EventChannel 설정
+  // Setup Caps Lock EventChannel
   plugin->caps_lock_event_channel_ =
       std::make_unique<flutter::EventChannel<flutter::EncodableValue>>(
           registrar->messenger(), "flutter_ime/caps_lock_changed",
@@ -75,7 +75,7 @@ void FlutterImePlugin::RegisterWithRegistrar(
           std::unique_ptr<flutter::EventSink<flutter::EncodableValue>>&& events)
           -> std::unique_ptr<flutter::StreamHandlerError<flutter::EncodableValue>> {
         plugin_pointer->caps_lock_event_sink_ = std::move(events);
-        // 초기 Caps Lock 상태 저장
+        // Store initial Caps Lock state
         last_caps_lock_state_ = plugin_pointer->IsCapsLockOn();
         return nullptr;
       },
@@ -94,7 +94,7 @@ FlutterImePlugin::FlutterImePlugin(flutter::PluginRegistrarWindows *registrar)
     : registrar_(registrar) {
   instance_ = this;
   flutter_hwnd_ = GetFlutterViewHwnd();
-  // WndProc 후킹 설정 (입력 소스 변경 감지용)
+  // Setup WndProc hook for input source change detection
   SetupWndProcHook();
 }
 
@@ -110,11 +110,11 @@ HWND FlutterImePlugin::GetFlutterViewHwnd() {
   return GetForegroundWindow();
 }
 
-// WndProc 후킹 - IME 메시지 차단 및 입력 소스 변경 감지
+// WndProc hook - Intercepts IME messages and detects input source changes
 LRESULT CALLBACK FlutterImePlugin::WndProcHook(HWND hwnd, UINT message, WPARAM wparam, LPARAM lparam) {
-  // 입력 소스 변경 감지
-  // WM_INPUTLANGCHANGE: 키보드 레이아웃 변경 (예: 영어 → 한국어 키보드)
-  // WM_IME_NOTIFY + IMN_SETCONVERSIONMODE: IME 내 한/영 전환
+  // Detect input source changes
+  // WM_INPUTLANGCHANGE: Keyboard layout change (e.g., English -> Korean keyboard)
+  // WM_IME_NOTIFY + IMN_SETCONVERSIONMODE: IME conversion mode change (e.g., Korean/English toggle)
   if (message == WM_INPUTLANGCHANGE) {
     if (instance_) {
       bool is_english = instance_->IsEnglishKeyboard();
@@ -127,8 +127,8 @@ LRESULT CALLBACK FlutterImePlugin::WndProcHook(HWND hwnd, UINT message, WPARAM w
     }
   }
 
-  // Caps Lock 상태 변경 감지
-  // WM_KEYDOWN/WM_KEYUP에서 VK_CAPITAL 키 감지
+  // Detect Caps Lock state changes
+  // Detect VK_CAPITAL key in WM_KEYDOWN/WM_KEYUP
   if ((message == WM_KEYDOWN || message == WM_KEYUP) && wparam == VK_CAPITAL) {
     if (instance_) {
       bool is_caps_lock_on = instance_->IsCapsLockOn();
@@ -147,10 +147,10 @@ LRESULT CALLBACK FlutterImePlugin::WndProcHook(HWND hwnd, UINT message, WPARAM w
       case WM_IME_NOTIFY:
       case WM_IME_SETCONTEXT:
       case WM_IME_CHAR:
-        // IME 메시지 차단
+        // Block IME messages
         return 0;
       case WM_CHAR:
-        // 한글 범위 문자 차단 (가-힣: 0xAC00-0xD7A3, ㄱ-ㅎ: 0x3131-0x314E, ㅏ-ㅣ: 0x314F-0x3163)
+        // Block Korean character range (Hangul syllables: 0xAC00-0xD7A3, Jamo: 0x3131-0x3163)
         if ((wparam >= 0xAC00 && wparam <= 0xD7A3) ||
             (wparam >= 0x3131 && wparam <= 0x3163)) {
           return 0;
@@ -165,14 +165,14 @@ LRESULT CALLBACK FlutterImePlugin::WndProcHook(HWND hwnd, UINT message, WPARAM w
   return DefWindowProc(hwnd, message, wparam, lparam);
 }
 
-// 입력 소스 변경 이벤트 전송
+// Send input source changed event to Flutter
 void FlutterImePlugin::SendInputSourceChangedEvent(bool is_english) {
   if (event_sink_) {
     event_sink_->Success(flutter::EncodableValue(is_english));
   }
 }
 
-// Caps Lock 상태 변경 이벤트 전송
+// Send Caps Lock state changed event to Flutter
 void FlutterImePlugin::SendCapsLockChangedEvent(bool is_caps_lock_on) {
   if (caps_lock_event_sink_) {
     caps_lock_event_sink_->Success(flutter::EncodableValue(is_caps_lock_on));
@@ -230,25 +230,25 @@ void FlutterImePlugin::HandleMethodCall(
 }
 
 
-/// Set IME Enlgish
+/// Set IME to English mode
 bool FlutterImePlugin::SetEnglishKeyboard(){
-  // get hwnd - Flutter 뷰의 HWND 사용
+  // Get Flutter view HWND
   HWND hwnd = GetFlutterViewHwnd();
   if(!hwnd) return false;
 
-  // get ime context
+  // Get IME context
   HIMC imc = ImmGetContext(hwnd);
   if(!imc) return false;
 
-  // set ime mode > english
+  // Set IME conversion mode to alphanumeric (English)
   bool success = ImmSetConversionStatus(imc,IME_CMODE_ALPHANUMERIC, IME_SMODE_NONE);
 
-  // free ime context
+  // Release IME context
   ImmReleaseContext(hwnd,imc);
   return success;
 }
 
-// check is ime english
+/// Check if IME is in English mode
 bool FlutterImePlugin::IsEnglishKeyboard(){
   HWND hwnd = GetFlutterViewHwnd();
   if(!hwnd) return false;
@@ -259,44 +259,44 @@ bool FlutterImePlugin::IsEnglishKeyboard(){
   DWORD conversion = 0;
   DWORD sentence = 0;
 
-  // get ime status
+  // Get IME conversion status
   if(!ImmGetConversionStatus(imc,&conversion,&sentence)){
     ImmReleaseContext(hwnd,imc);
     return false;
   }
 
-  // free ime
+  // Release IME context
   ImmReleaseContext(hwnd,imc);
 
-  // IME_CMODE_NATIVE(0x0001)가 설정되어 있으면 한글 모드
-  // 설정되어 있지 않으면 영어 모드
+  // IME_CMODE_NATIVE (0x0001) set = native language mode (e.g., Korean)
+  // IME_CMODE_NATIVE not set = English mode
   return (conversion & IME_CMODE_NATIVE) == 0;
 }
 
-/// Disable IME - WndProc 후킹으로 IME 메시지 차단
+/// Disable IME - Block IME messages via WndProc hook
 bool FlutterImePlugin::DisableIME(){
   HWND hwnd = GetFlutterViewHwnd();
   if(!hwnd) return false;
 
-  // WndProc 후킹 설정
+  // Setup WndProc hook
   SetupWndProcHook();
   ime_disabled_ = true;
 
-  // IME 컨텍스트도 분리
+  // Detach IME context
   ImmAssociateContextEx(hwnd, nullptr, 0);
 
   return true;
 }
 
-/// Enable IME - WndProc 후킹 해제 및 IME 복원
+/// Enable IME - Restore IME functionality
 bool FlutterImePlugin::EnableIME(){
   HWND hwnd = GetFlutterViewHwnd();
   if(!hwnd) return false;
 
-  // IME 메시지 차단 해제
+  // Stop blocking IME messages
   ime_disabled_ = false;
 
-  // IME 컨텍스트 복원
+  // Restore IME context
   ImmAssociateContextEx(hwnd, nullptr, IACE_DEFAULT);
 
   return true;
@@ -304,7 +304,7 @@ bool FlutterImePlugin::EnableIME(){
 
 /// Check if Caps Lock is on
 bool FlutterImePlugin::IsCapsLockOn(){
-  // GetKeyState의 하위 비트가 1이면 Caps Lock 활성화
+  // GetKeyState low-order bit is 1 when Caps Lock is toggled on
   return (GetKeyState(VK_CAPITAL) & 0x0001) != 0;
 }
 

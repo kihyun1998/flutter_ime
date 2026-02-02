@@ -30,7 +30,7 @@ class FlutterImePlugin : public flutter::Plugin {
       const flutter::MethodCall<flutter::EncodableValue> &method_call,
       std::unique_ptr<flutter::MethodResult<flutter::EncodableValue>> result);
 
-  // IME 관련 유틸리티 함수들
+  // IME utility functions
   bool SetEnglishKeyboard();
   bool IsEnglishKeyboard();
   bool DisableIME();
@@ -38,10 +38,10 @@ class FlutterImePlugin : public flutter::Plugin {
   bool IsCapsLockOn();
 
  private:
-  // Flutter 뷰의 HWND 가져오기
+  // Get Flutter view HWND
   HWND GetFlutterViewHwnd();
 
-  // WndProc 관련
+  // WndProc hook functions
   static LRESULT CALLBACK WndProcHook(HWND hwnd, UINT message, WPARAM wparam, LPARAM lparam);
   void SetupWndProcHook();
   void RemoveWndProcHook();
@@ -49,23 +49,23 @@ class FlutterImePlugin : public flutter::Plugin {
   flutter::PluginRegistrarWindows *registrar_ = nullptr;
   HWND flutter_hwnd_ = nullptr;
 
-  // WndProc 후킹용
+  // WndProc hook members
   static FlutterImePlugin* instance_;
   static WNDPROC original_wndproc_;
   static bool ime_disabled_;
 
-  // EventChannel용
+  // EventChannel for input source changes
   std::unique_ptr<flutter::EventChannel<flutter::EncodableValue>> event_channel_;
   std::unique_ptr<flutter::EventSink<flutter::EncodableValue>> event_sink_;
 
-  // Caps Lock EventChannel용
+  // EventChannel for Caps Lock state changes
   std::unique_ptr<flutter::EventChannel<flutter::EncodableValue>> caps_lock_event_channel_;
   std::unique_ptr<flutter::EventSink<flutter::EncodableValue>> caps_lock_event_sink_;
 
   void SendInputSourceChangedEvent(bool is_english);
   void SendCapsLockChangedEvent(bool is_caps_lock_on);
 
-  // Caps Lock 상태 추적
+  // Track Caps Lock state
   static bool last_caps_lock_state_;
 };
 

@@ -18,7 +18,7 @@ public class FlutterImePlugin: NSObject, FlutterPlugin, FlutterStreamHandler {
     eventChannel.setStreamHandler(instance)
     capsLockEventChannel.setStreamHandler(CapsLockStreamHandler(plugin: instance))
 
-    // 입력 소스 변경 알림 구독
+    // Subscribe to input source change notifications
     DistributedNotificationCenter.default().addObserver(
       instance,
       selector: #selector(inputSourceChanged),
@@ -110,20 +110,20 @@ public class FlutterImePlugin: NSObject, FlutterPlugin, FlutterStreamHandler {
     return NSEvent.modifierFlags.contains(.capsLock)
   }
 
-  // Caps Lock 모니터링 시작
+  /// Starts monitoring Caps Lock state changes.
   func startCapsLockMonitoring() {
     lastCapsLockState = isCapsLockOn()
     flagsChangedMonitor = NSEvent.addGlobalMonitorForEvents(matching: .flagsChanged) { [weak self] event in
       self?.handleFlagsChanged(event)
     }
-    // 로컬 이벤트도 모니터링 (앱이 포커스일 때)
+    // Also monitor local events (when app has focus)
     NSEvent.addLocalMonitorForEvents(matching: .flagsChanged) { [weak self] event in
       self?.handleFlagsChanged(event)
       return event
     }
   }
 
-  // Caps Lock 모니터링 중지
+  /// Stops monitoring Caps Lock state changes.
   func stopCapsLockMonitoring() {
     if let monitor = flagsChangedMonitor {
       NSEvent.removeMonitor(monitor)
@@ -140,7 +140,7 @@ public class FlutterImePlugin: NSObject, FlutterPlugin, FlutterStreamHandler {
   }
 }
 
-// Caps Lock 전용 StreamHandler
+/// Stream handler for Caps Lock state changes.
 class CapsLockStreamHandler: NSObject, FlutterStreamHandler {
   private weak var plugin: FlutterImePlugin?
 

@@ -5,25 +5,25 @@ import 'package:flutter/services.dart';
 
 import 'flutter_ime_platform_interface.dart';
 
-/// Method Channel을 사용하는 기본 구현체
+/// Default implementation using Method Channel.
 class MethodChannelFlutterIme extends FlutterImePlatform {
-  /// Method Channel 인스턴스
+  /// The method channel instance.
   @visibleForTesting
   final methodChannel = const MethodChannel('flutter_ime');
 
-  /// Event Channel 인스턴스
+  /// The event channel instance for input source changes.
   @visibleForTesting
   final eventChannel = const EventChannel('flutter_ime/input_source_changed');
 
-  /// Caps Lock Event Channel 인스턴스
+  /// The event channel instance for Caps Lock changes.
   @visibleForTesting
   final capsLockEventChannel = const EventChannel('flutter_ime/caps_lock_changed');
 
-  /// Broadcast stream controller
+  /// Broadcast stream controller for input source changes.
   StreamController<bool>? _streamController;
   StreamSubscription? _eventSubscription;
 
-  /// Caps Lock stream controller
+  /// Stream controller for Caps Lock state changes.
   StreamController<bool>? _capsLockStreamController;
   StreamSubscription? _capsLockEventSubscription;
 
