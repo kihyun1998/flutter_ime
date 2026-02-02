@@ -19,106 +19,118 @@ class MyApp extends StatelessWidget {
         colorScheme: ColorScheme.fromSeed(seedColor: Colors.deepPurple),
         useMaterial3: true,
       ),
-      home: const LoginPage(),
+      home: const HomePage(),
     );
   }
 }
 
-class LoginPage extends StatefulWidget {
-  const LoginPage({super.key});
+class HomePage extends StatefulWidget {
+  const HomePage({super.key});
 
   @override
-  State<LoginPage> createState() => _LoginPageState();
+  State<HomePage> createState() => _HomePageState();
 }
 
-class _LoginPageState extends State<LoginPage> {
-  final _emailController = TextEditingController();
+class _HomePageState extends State<HomePage> {
+  int _selectedIndex = 0;
+
+  static const List<NavigationRailDestination> _destinations = [
+    NavigationRailDestination(
+      icon: Icon(Icons.keyboard_capslock_outlined),
+      selectedIcon: Icon(Icons.keyboard_capslock),
+      label: Text('Caps Lock'),
+    ),
+    NavigationRailDestination(
+      icon: Icon(Icons.language_outlined),
+      selectedIcon: Icon(Icons.language),
+      label: Text('키보드 상태'),
+    ),
+    NavigationRailDestination(
+      icon: Icon(Icons.block_outlined),
+      selectedIcon: Icon(Icons.block),
+      label: Text('IME 비활성화'),
+    ),
+    NavigationRailDestination(
+      icon: Icon(Icons.swap_horiz_outlined),
+      selectedIcon: Icon(Icons.swap_horiz),
+      label: Text('한영전환 감지'),
+    ),
+    NavigationRailDestination(
+      icon: Icon(Icons.lock_outline),
+      selectedIcon: Icon(Icons.lock),
+      label: Text('영어 강제'),
+    ),
+  ];
+
+  static const List<Widget> _pages = [
+    CapsLockPage(),
+    KeyboardStatusPage(),
+    ImeDisablePage(),
+    InputSourceChangePage(),
+    ForceEnglishPage(),
+  ];
+
+  @override
+  Widget build(BuildContext context) {
+    return Scaffold(
+      body: Row(
+        children: [
+          NavigationRail(
+            selectedIndex: _selectedIndex,
+            onDestinationSelected: (index) {
+              setState(() {
+                _selectedIndex = index;
+              });
+            },
+            extended: true,
+            minExtendedWidth: 180,
+            destinations: _destinations,
+          ),
+          const VerticalDivider(thickness: 1, width: 1),
+          Expanded(
+            child: _pages[_selectedIndex],
+          ),
+        ],
+      ),
+    );
+  }
+}
+
+// ============================================================
+// 1. Caps Lock 감지
+// ============================================================
+class CapsLockPage extends StatefulWidget {
+  const CapsLockPage({super.key});
+
+  @override
+  State<CapsLockPage> createState() => _CapsLockPageState();
+}
+
+class _CapsLockPageState extends State<CapsLockPage> {
   final _passwordController = TextEditingController();
-  final _imeTestController = TextEditingController();
-  final _inputSourceTestController = TextEditingController();
-  final _macosImeTestController = TextEditingController();
-  final _passwordFocusNode = FocusNode();
-  final _imeTestFocusNode = FocusNode();
-  final _inputSourceTestFocusNode = FocusNode();
-  final _macosImeTestFocusNode = FocusNode();
-  String _keyboardStatus = 'Unknown';
-  String _passwordDisplay = '';
-
-  // 한영전환 감지 (포커스 시에만)
-  StreamSubscription<bool>? _inputSourceSubscription;
-  String _inputSourceStatus = '';
-
-  // macOS IME 비활성화용
-  StreamSubscription<bool>? _macosImeSubscription;
-
-  // Caps Lock 상태
+  final _focusNode = FocusNode();
   StreamSubscription<bool>? _capsLockSubscription;
   bool _isCapsLockOn = false;
 
   @override
   void initState() {
     super.initState();
-
-
-    // IME 테스트 필드: 포커스 시 IME 비활성화, 포커스 해제 시 활성화
-    _imeTestFocusNode.addListener(() {
-      if (_imeTestFocusNode.hasFocus) {
-        disableIME();
-      } else {
-        enableIME();
-      }
-    });
-
-    // 한영전환 감지 테스트: 항상 구독 (디버깅용)
-    _inputSourceSubscription = onInputSourceChanged().listen((isEnglish) {
-      debugPrint('>>> 한영전환 감지: ${isEnglish ? "English" : "Korean"}');
-      setState(() {
-        _inputSourceStatus = isEnglish ? 'English' : 'Korean';
-      });
-    });
-
-    // macOS용 IME 비활성화: 포커스 시 영어로 전환 + 한영전환 감지해서 되돌림
-    _macosImeTestFocusNode.addListener(() {
-      if (_macosImeTestFocusNode.hasFocus) {
-        // 포커스 받으면 영어로 전환
-        setEnglishKeyboard();
-        // 한영전환 감지해서 영어로 되돌림
-        _macosImeSubscription = onInputSourceChanged().listen((isEnglish) {
-          if (!isEnglish) {
-            setEnglishKeyboard();
-          }
-        });
-      } else {
-        // 포커스 잃으면 구독 취소
-        _macosImeSubscription?.cancel();
-        _macosImeSubscription = null;
-      }
-    });
-
-    // 비밀번호 필드 포커스 시에만 Caps Lock 감지
-    _passwordFocusNode.addListener(_onPasswordFocusChanged);
+    _focusNode.addListener(_onFocusChanged);
   }
 
-  void _onPasswordFocusChanged() async {
-    if (_passwordFocusNode.hasFocus) {
-      // 포커스 시 영어 키보드로 변경 + Caps Lock 상태 확인
-      setEnglishKeyboard();
-
-      // 현재 Caps Lock 상태 확인
+  void _onFocusChanged() async {
+    if (_focusNode.hasFocus) {
       final capsLock = await isCapsLockOn();
       setState(() {
         _isCapsLockOn = capsLock;
       });
 
-      // 변경 감지 구독 시작
       _capsLockSubscription = onCapsLockChanged().listen((isOn) {
-        debugPrint('>>> Caps Lock 상태 변경: ${isOn ? "ON" : "OFF"}');
         setState(() {
           _isCapsLockOn = isOn;
         });
       });
     } else {
-      // 포커스 해제 시 구독 취소 및 상태 초기화
       _capsLockSubscription?.cancel();
       _capsLockSubscription = null;
       setState(() {
@@ -127,131 +139,472 @@ class _LoginPageState extends State<LoginPage> {
     }
   }
 
-  Future<void> _checkKeyboardStatus() async {
-    final isEnglish = await isEnglishKeyboard();
-    setState(() {
-      _keyboardStatus = isEnglish ? 'English' : 'Non-English';
-    });
-  }
-
   @override
   void dispose() {
-    _inputSourceSubscription?.cancel();
-    _macosImeSubscription?.cancel();
     _capsLockSubscription?.cancel();
-    _emailController.dispose();
     _passwordController.dispose();
-    _imeTestController.dispose();
-    _inputSourceTestController.dispose();
-    _macosImeTestController.dispose();
-    _passwordFocusNode.dispose();
-    _imeTestFocusNode.dispose();
-    _inputSourceTestFocusNode.dispose();
-    _macosImeTestFocusNode.dispose();
+    _focusNode.dispose();
     super.dispose();
-  }
-
-  void _onLogin() {
-    setState(() {
-      _passwordDisplay = _passwordController.text;
-    });
   }
 
   @override
   Widget build(BuildContext context) {
-    return Scaffold(
-      appBar: AppBar(
-        title: const Text('로그인'),
-      ),
-      body: SingleChildScrollView(
-        padding: const EdgeInsets.all(16.0),
-        child: Column(
-          crossAxisAlignment: CrossAxisAlignment.stretch,
-          children: [
-            TextField(
-              controller: _emailController,
-              decoration: const InputDecoration(
-                labelText: '이메일',
-                border: OutlineInputBorder(),
-              ),
-              keyboardType: TextInputType.emailAddress,
-            ),
-            const SizedBox(height: 16),
-            TextField(
+    return Padding(
+      padding: const EdgeInsets.all(24),
+      child: Column(
+        crossAxisAlignment: CrossAxisAlignment.start,
+        children: [
+          Text(
+            'Caps Lock 감지',
+            style: Theme.of(context).textTheme.headlineMedium,
+          ),
+          const SizedBox(height: 8),
+          Text(
+            '비밀번호 입력 시 Caps Lock 상태를 감지합니다.\n'
+            'API: isCapsLockOn(), onCapsLockChanged()',
+            style: Theme.of(context).textTheme.bodyMedium?.copyWith(
+                  color: Colors.grey[600],
+                ),
+          ),
+          const SizedBox(height: 24),
+          SizedBox(
+            width: 300,
+            child: TextField(
               controller: _passwordController,
-              focusNode: _passwordFocusNode,
+              focusNode: _focusNode,
               decoration: InputDecoration(
                 labelText: '비밀번호',
                 border: const OutlineInputBorder(),
                 suffixIcon: _isCapsLockOn
                     ? const Tooltip(
                         message: 'Caps Lock이 켜져 있습니다',
-                        child: Icon(Icons.keyboard_capslock, color: Colors.orange),
+                        child:
+                            Icon(Icons.keyboard_capslock, color: Colors.orange),
                       )
                     : null,
               ),
               obscureText: true,
             ),
-            if (_isCapsLockOn)
-              const Padding(
-                padding: EdgeInsets.only(top: 4),
-                child: Text(
-                  'Caps Lock이 켜져 있습니다',
-                  style: TextStyle(color: Colors.orange, fontSize: 12),
-                ),
+          ),
+          if (_isCapsLockOn)
+            const Padding(
+              padding: EdgeInsets.only(top: 8),
+              child: Row(
+                children: [
+                  Icon(Icons.warning_amber, color: Colors.orange, size: 16),
+                  SizedBox(width: 4),
+                  Text(
+                    'Caps Lock이 켜져 있습니다',
+                    style: TextStyle(color: Colors.orange),
+                  ),
+                ],
               ),
-            const SizedBox(height: 24),
-            ElevatedButton(
-              onPressed: _onLogin,
-              child: const Text('로그인'),
             ),
-            if (_passwordDisplay.isNotEmpty) ...[
-              const SizedBox(height: 8),
-              Text('입력된 비밀번호: $_passwordDisplay'),
-            ],
-            const SizedBox(height: 16),
-            OutlinedButton(
-              onPressed: _checkKeyboardStatus,
-              child: const Text('현재 키보드 상태 확인'),
+        ],
+      ),
+    );
+  }
+}
+
+// ============================================================
+// 2. 키보드 상태 확인
+// ============================================================
+class KeyboardStatusPage extends StatefulWidget {
+  const KeyboardStatusPage({super.key});
+
+  @override
+  State<KeyboardStatusPage> createState() => _KeyboardStatusPageState();
+}
+
+class _KeyboardStatusPageState extends State<KeyboardStatusPage> {
+  String _status = '확인 전';
+
+  Future<void> _checkStatus() async {
+    final isEnglish = await isEnglishKeyboard();
+    setState(() {
+      _status = isEnglish ? 'English' : 'Non-English (한글 등)';
+    });
+  }
+
+  @override
+  Widget build(BuildContext context) {
+    return Padding(
+      padding: const EdgeInsets.all(24),
+      child: Column(
+        crossAxisAlignment: CrossAxisAlignment.start,
+        children: [
+          Text(
+            '키보드 상태 확인',
+            style: Theme.of(context).textTheme.headlineMedium,
+          ),
+          const SizedBox(height: 8),
+          Text(
+            '현재 입력 소스가 영어인지 확인합니다.\n'
+            'API: isEnglishKeyboard()',
+            style: Theme.of(context).textTheme.bodyMedium?.copyWith(
+                  color: Colors.grey[600],
+                ),
+          ),
+          const SizedBox(height: 24),
+          Card(
+            child: Padding(
+              padding: const EdgeInsets.all(16),
+              child: Row(
+                mainAxisSize: MainAxisSize.min,
+                children: [
+                  Icon(
+                    _status.contains('English')
+                        ? Icons.check_circle
+                        : _status.contains('Non')
+                            ? Icons.cancel
+                            : Icons.help_outline,
+                    color: _status.contains('English')
+                        ? Colors.green
+                        : _status.contains('Non')
+                            ? Colors.orange
+                            : Colors.grey,
+                    size: 32,
+                  ),
+                  const SizedBox(width: 12),
+                  Text(
+                    _status,
+                    style: Theme.of(context).textTheme.titleLarge,
+                  ),
+                ],
+              ),
             ),
-            const SizedBox(height: 8),
-            Text(
-              'Keyboard: $_keyboardStatus',
-              style: Theme.of(context).textTheme.titleMedium,
+          ),
+          const SizedBox(height: 16),
+          ElevatedButton.icon(
+            onPressed: _checkStatus,
+            icon: const Icon(Icons.refresh),
+            label: const Text('상태 확인'),
+          ),
+        ],
+      ),
+    );
+  }
+}
+
+// ============================================================
+// 3. IME 비활성화 (Windows only)
+// ============================================================
+class ImeDisablePage extends StatefulWidget {
+  const ImeDisablePage({super.key});
+
+  @override
+  State<ImeDisablePage> createState() => _ImeDisablePageState();
+}
+
+class _ImeDisablePageState extends State<ImeDisablePage> {
+  final _controller = TextEditingController();
+  final _focusNode = FocusNode();
+
+  @override
+  void initState() {
+    super.initState();
+    _focusNode.addListener(() {
+      if (_focusNode.hasFocus) {
+        disableIME();
+      } else {
+        enableIME();
+      }
+    });
+  }
+
+  @override
+  void dispose() {
+    _controller.dispose();
+    _focusNode.dispose();
+    super.dispose();
+  }
+
+  @override
+  Widget build(BuildContext context) {
+    return Padding(
+      padding: const EdgeInsets.all(24),
+      child: Column(
+        crossAxisAlignment: CrossAxisAlignment.start,
+        children: [
+          Text(
+            'IME 비활성화',
+            style: Theme.of(context).textTheme.headlineMedium,
+          ),
+          const SizedBox(height: 8),
+          Text(
+            'Windows에서 IME를 완전히 비활성화합니다.\n'
+            '포커스 시 한글 입력이 불가능합니다.\n'
+            'API: disableIME(), enableIME()',
+            style: Theme.of(context).textTheme.bodyMedium?.copyWith(
+                  color: Colors.grey[600],
+                ),
+          ),
+          const SizedBox(height: 8),
+          Container(
+            padding: const EdgeInsets.symmetric(horizontal: 12, vertical: 6),
+            decoration: BoxDecoration(
+              color: Colors.blue[50],
+              borderRadius: BorderRadius.circular(4),
             ),
-            const SizedBox(height: 24),
-            const Divider(),
-            const SizedBox(height: 16),
-            TextField(
-              controller: _imeTestController,
-              focusNode: _imeTestFocusNode,
+            child: const Text(
+              'Windows only',
+              style: TextStyle(color: Colors.blue),
+            ),
+          ),
+          const SizedBox(height: 24),
+          SizedBox(
+            width: 300,
+            child: TextField(
+              controller: _controller,
+              focusNode: _focusNode,
               decoration: const InputDecoration(
-                labelText: 'IME 비활성화 테스트 (Windows only)',
+                labelText: 'IME 비활성화 테스트',
                 helperText: '포커스 시 한글 입력 불가',
                 border: OutlineInputBorder(),
               ),
             ),
-            const SizedBox(height: 24),
-            const Divider(),
-            const SizedBox(height: 16),
-            TextField(
-              controller: _inputSourceTestController,
-              focusNode: _inputSourceTestFocusNode,
-              decoration: InputDecoration(
-                labelText: '한영전환 감지 테스트',
-                helperText: '포커스 중 한영전환 감지: $_inputSourceStatus',
-                border: const OutlineInputBorder(),
+          ),
+        ],
+      ),
+    );
+  }
+}
+
+// ============================================================
+// 4. 한영전환 감지
+// ============================================================
+class InputSourceChangePage extends StatefulWidget {
+  const InputSourceChangePage({super.key});
+
+  @override
+  State<InputSourceChangePage> createState() => _InputSourceChangePageState();
+}
+
+class _InputSourceChangePageState extends State<InputSourceChangePage> {
+  final _controller = TextEditingController();
+  StreamSubscription<bool>? _subscription;
+  String _currentSource = '감지 중...';
+  final List<String> _history = [];
+
+  @override
+  void initState() {
+    super.initState();
+    _subscription = onInputSourceChanged().listen((isEnglish) {
+      final source = isEnglish ? 'English' : 'Korean';
+      setState(() {
+        _currentSource = source;
+        _history.insert(0, '${DateTime.now().toString().split('.').first} → $source');
+        if (_history.length > 10) _history.removeLast();
+      });
+    });
+  }
+
+  @override
+  void dispose() {
+    _subscription?.cancel();
+    _controller.dispose();
+    super.dispose();
+  }
+
+  @override
+  Widget build(BuildContext context) {
+    return Padding(
+      padding: const EdgeInsets.all(24),
+      child: Column(
+        crossAxisAlignment: CrossAxisAlignment.start,
+        children: [
+          Text(
+            '한영전환 감지',
+            style: Theme.of(context).textTheme.headlineMedium,
+          ),
+          const SizedBox(height: 8),
+          Text(
+            '입력 소스(한/영) 변경을 실시간으로 감지합니다.\n'
+            'API: onInputSourceChanged()',
+            style: Theme.of(context).textTheme.bodyMedium?.copyWith(
+                  color: Colors.grey[600],
+                ),
+          ),
+          const SizedBox(height: 24),
+          Card(
+            child: Padding(
+              padding: const EdgeInsets.all(16),
+              child: Row(
+                mainAxisSize: MainAxisSize.min,
+                children: [
+                  Icon(
+                    _currentSource == 'English' ? Icons.abc : Icons.translate,
+                    size: 32,
+                    color: _currentSource == 'English'
+                        ? Colors.blue
+                        : Colors.green,
+                  ),
+                  const SizedBox(width: 12),
+                  Text(
+                    '현재: $_currentSource',
+                    style: Theme.of(context).textTheme.titleLarge,
+                  ),
+                ],
               ),
             ),
-            const SizedBox(height: 24),
-            const Divider(),
-            const SizedBox(height: 16),
-            TextField(
-              controller: _macosImeTestController,
-              focusNode: _macosImeTestFocusNode,
+          ),
+          const SizedBox(height: 16),
+          SizedBox(
+            width: 300,
+            child: TextField(
+              controller: _controller,
               decoration: const InputDecoration(
-                labelText: 'macOS용 IME 비활성화 테스트',
-                helperText: '한영전환해도 영어로 되돌림 (Windows/macOS)',
+                labelText: '여기서 한영전환 테스트',
+                border: OutlineInputBorder(),
+              ),
+            ),
+          ),
+          const SizedBox(height: 24),
+          Text(
+            '변경 기록',
+            style: Theme.of(context).textTheme.titleMedium,
+          ),
+          const SizedBox(height: 8),
+          Expanded(
+            child: Container(
+              width: 350,
+              decoration: BoxDecoration(
+                border: Border.all(color: Colors.grey[300]!),
+                borderRadius: BorderRadius.circular(8),
+              ),
+              child: _history.isEmpty
+                  ? const Center(child: Text('한영전환을 해보세요'))
+                  : ListView.builder(
+                      itemCount: _history.length,
+                      itemBuilder: (context, index) {
+                        return ListTile(
+                          dense: true,
+                          title: Text(
+                            _history[index],
+                            style: const TextStyle(fontFamily: 'monospace'),
+                          ),
+                        );
+                      },
+                    ),
+            ),
+          ),
+        ],
+      ),
+    );
+  }
+}
+
+// ============================================================
+// 5. 영어 강제 유지
+// ============================================================
+class ForceEnglishPage extends StatefulWidget {
+  const ForceEnglishPage({super.key});
+
+  @override
+  State<ForceEnglishPage> createState() => _ForceEnglishPageState();
+}
+
+class _ForceEnglishPageState extends State<ForceEnglishPage> {
+  final _controller = TextEditingController();
+  final _focusNode = FocusNode();
+  StreamSubscription<bool>? _subscription;
+  bool _isActive = false;
+
+  @override
+  void initState() {
+    super.initState();
+    _focusNode.addListener(_onFocusChanged);
+  }
+
+  void _onFocusChanged() {
+    if (_focusNode.hasFocus) {
+      setEnglishKeyboard();
+      _subscription = onInputSourceChanged().listen((isEnglish) {
+        if (!isEnglish) {
+          setEnglishKeyboard();
+        }
+      });
+      setState(() {
+        _isActive = true;
+      });
+    } else {
+      _subscription?.cancel();
+      _subscription = null;
+      setState(() {
+        _isActive = false;
+      });
+    }
+  }
+
+  @override
+  void dispose() {
+    _subscription?.cancel();
+    _controller.dispose();
+    _focusNode.dispose();
+    super.dispose();
+  }
+
+  @override
+  Widget build(BuildContext context) {
+    return Padding(
+      padding: const EdgeInsets.all(24),
+      child: Column(
+        crossAxisAlignment: CrossAxisAlignment.start,
+        children: [
+          Text(
+            '영어 강제 유지',
+            style: Theme.of(context).textTheme.headlineMedium,
+          ),
+          const SizedBox(height: 8),
+          Text(
+            '포커스 중 한영전환을 해도 자동으로 영어로 되돌립니다.\n'
+            'macOS에서 IME 비활성화 대신 사용합니다.\n'
+            'API: setEnglishKeyboard() + onInputSourceChanged()',
+            style: Theme.of(context).textTheme.bodyMedium?.copyWith(
+                  color: Colors.grey[600],
+                ),
+          ),
+          const SizedBox(height: 8),
+          Container(
+            padding: const EdgeInsets.symmetric(horizontal: 12, vertical: 6),
+            decoration: BoxDecoration(
+              color: Colors.purple[50],
+              borderRadius: BorderRadius.circular(4),
+            ),
+            child: const Text(
+              'Windows / macOS',
+              style: TextStyle(color: Colors.purple),
+            ),
+          ),
+          const SizedBox(height: 24),
+          if (_isActive)
+            Container(
+              margin: const EdgeInsets.only(bottom: 12),
+              padding: const EdgeInsets.symmetric(horizontal: 12, vertical: 6),
+              decoration: BoxDecoration(
+                color: Colors.green[50],
+                borderRadius: BorderRadius.circular(4),
+              ),
+              child: const Row(
+                mainAxisSize: MainAxisSize.min,
+                children: [
+                  Icon(Icons.check, color: Colors.green, size: 16),
+                  SizedBox(width: 4),
+                  Text(
+                    '영어 강제 활성화 중',
+                    style: TextStyle(color: Colors.green),
+                  ),
+                ],
+              ),
+            ),
+          SizedBox(
+            width: 300,
+            child: TextField(
+              controller: _controller,
+              focusNode: _focusNode,
+              decoration: const InputDecoration(
+                labelText: '영어만 입력 가능',
+                helperText: '한영전환해도 영어로 되돌아옴',
                 border: OutlineInputBorder(),
               ),
               inputFormatters: [
@@ -260,8 +613,8 @@ class _LoginPageState extends State<LoginPage> {
                 ),
               ],
             ),
-          ],
-        ),
+          ),
+        ],
       ),
     );
   }
