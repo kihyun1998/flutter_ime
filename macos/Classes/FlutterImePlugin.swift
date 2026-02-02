@@ -2,11 +2,41 @@ import Cocoa
 import FlutterMacOS
 import Carbon
 
-public class FlutterImePlugin: NSObject, FlutterPlugin {
+public class FlutterImePlugin: NSObject, FlutterPlugin, FlutterStreamHandler {
+  private var eventSink: FlutterEventSink?
+
   public static func register(with registrar: FlutterPluginRegistrar) {
     let channel = FlutterMethodChannel(name: "flutter_ime", binaryMessenger: registrar.messenger)
+    let eventChannel = FlutterEventChannel(name: "flutter_ime/input_source_changed", binaryMessenger: registrar.messenger)
+
     let instance = FlutterImePlugin()
     registrar.addMethodCallDelegate(instance, channel: channel)
+    eventChannel.setStreamHandler(instance)
+
+    // 입력 소스 변경 알림 구독
+    DistributedNotificationCenter.default().addObserver(
+      instance,
+      selector: #selector(inputSourceChanged),
+      name: NSNotification.Name(kTISNotifySelectedKeyboardInputSourceChanged as String),
+      object: nil
+    )
+  }
+
+  @objc private func inputSourceChanged() {
+    let isEnglish = isEnglishKeyboard()
+    eventSink?(isEnglish)
+  }
+
+  // MARK: - FlutterStreamHandler
+
+  public func onListen(withArguments arguments: Any?, eventSink events: @escaping FlutterEventSink) -> FlutterError? {
+    self.eventSink = events
+    return nil
+  }
+
+  public func onCancel(withArguments arguments: Any?) -> FlutterError? {
+    self.eventSink = nil
+    return nil
   }
 
   public func handle(_ call: FlutterMethodCall, result: @escaping FlutterResult) {
@@ -22,6 +52,9 @@ public class FlutterImePlugin: NSObject, FlutterPlugin {
       result(isEnglishKeyboard())
     case "getPlatformVersion":
       result("macOS " + ProcessInfo.processInfo.operatingSystemVersionString)
+    case "disableIME", "enableIME":
+      // Not supported on macOS
+      result(FlutterMethodNotImplemented)
     default:
       result(FlutterMethodNotImplemented)
     }

@@ -25,3 +25,42 @@ Future<bool> isEnglishKeyboard() async {
 
   return FlutterImePlatform.instance.isEnglishKeyboard();
 }
+
+/// Disable IME (prevents non-English input)
+///
+/// Supported platforms: Windows only
+///
+/// Does nothing on unsupported platforms.
+Future<void> disableIME() async {
+  if (!Platform.isWindows) return;
+
+  await FlutterImePlatform.instance.disableIME();
+}
+
+/// Enable IME (restores input method)
+///
+/// Supported platforms: Windows only
+///
+/// Does nothing on unsupported platforms.
+Future<void> enableIME() async {
+  if (!Platform.isWindows) return;
+
+  await FlutterImePlatform.instance.enableIME();
+}
+
+/// Stream that emits when input source (keyboard layout) changes
+///
+/// Supported platforms: Windows, macOS
+///
+/// Emits:
+/// - `true`: Changed to English keyboard
+/// - `false`: Changed to non-English keyboard (e.g., Korean)
+///
+/// Returns empty stream on unsupported platforms.
+Stream<bool> onInputSourceChanged() {
+  if (!Platform.isWindows && !Platform.isMacOS) {
+    return const Stream.empty();
+  }
+
+  return FlutterImePlatform.instance.onInputSourceChanged;
+}

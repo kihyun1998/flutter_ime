@@ -29,4 +29,19 @@ abstract class FlutterImePlatform extends PlatformInterface {
   Future<bool> isEnglishKeyboard() async {
     throw UnimplementedError('isEnglishKeyboard() must be implemented');
   }
+
+  /// IME 비활성화 (Windows only)
+  Future<void> disableIME() async {
+    throw UnimplementedError('disableIME() must be implemented');
+  }
+
+  /// IME 활성화 (Windows only)
+  Future<void> enableIME() async {
+    throw UnimplementedError('enableIME() must be implemented');
+  }
+
+  /// 입력 소스 변경 이벤트 스트림
+  Stream<bool> get onInputSourceChanged {
+    throw UnimplementedError('onInputSourceChanged must be implemented');
+  }
 }

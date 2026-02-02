@@ -1,3 +1,5 @@
+import 'dart:async';
+
 import 'package:flutter/material.dart';
 import 'package:flutter_ime/flutter_ime.dart';
 
@@ -31,8 +33,17 @@ class LoginPage extends StatefulWidget {
 class _LoginPageState extends State<LoginPage> {
   final _emailController = TextEditingController();
   final _passwordController = TextEditingController();
+  final _imeTestController = TextEditingController();
+  final _inputSourceTestController = TextEditingController();
   final _passwordFocusNode = FocusNode();
+  final _imeTestFocusNode = FocusNode();
+  final _inputSourceTestFocusNode = FocusNode();
   String _keyboardStatus = 'Unknown';
+  String _passwordDisplay = '';
+
+  // 한영전환 감지 (포커스 시에만)
+  StreamSubscription<bool>? _inputSourceSubscription;
+  String _inputSourceStatus = '';
 
   @override
   void initState() {
@@ -43,6 +54,23 @@ class _LoginPageState extends State<LoginPage> {
       if (_passwordFocusNode.hasFocus) {
         setEnglishKeyboard();
       }
+    });
+
+    // IME 테스트 필드: 포커스 시 IME 비활성화, 포커스 해제 시 활성화
+    _imeTestFocusNode.addListener(() {
+      if (_imeTestFocusNode.hasFocus) {
+        disableIME();
+      } else {
+        enableIME();
+      }
+    });
+
+    // 한영전환 감지 테스트: 항상 구독 (디버깅용)
+    _inputSourceSubscription = onInputSourceChanged().listen((isEnglish) {
+      debugPrint('>>> 한영전환 감지: ${isEnglish ? "English" : "Korean"}');
+      setState(() {
+        _inputSourceStatus = isEnglish ? 'English' : 'Korean';
+      });
     });
   }
 
@@ -55,10 +83,21 @@ class _LoginPageState extends State<LoginPage> {
 
   @override
   void dispose() {
+    _inputSourceSubscription?.cancel();
     _emailController.dispose();
     _passwordController.dispose();
+    _imeTestController.dispose();
+    _inputSourceTestController.dispose();
     _passwordFocusNode.dispose();
+    _imeTestFocusNode.dispose();
+    _inputSourceTestFocusNode.dispose();
     super.dispose();
+  }
+
+  void _onLogin() {
+    setState(() {
+      _passwordDisplay = _passwordController.text;
+    });
   }
 
   @override
@@ -67,10 +106,10 @@ class _LoginPageState extends State<LoginPage> {
       appBar: AppBar(
         title: const Text('로그인'),
       ),
-      body: Padding(
+      body: SingleChildScrollView(
         padding: const EdgeInsets.all(16.0),
         child: Column(
-          mainAxisAlignment: MainAxisAlignment.center,
+          crossAxisAlignment: CrossAxisAlignment.stretch,
           children: [
             TextField(
               controller: _emailController,
@@ -92,11 +131,13 @@ class _LoginPageState extends State<LoginPage> {
             ),
             const SizedBox(height: 24),
             ElevatedButton(
-              onPressed: () {
-                // 로그인 처리 로직
-              },
+              onPressed: _onLogin,
               child: const Text('로그인'),
             ),
+            if (_passwordDisplay.isNotEmpty) ...[
+              const SizedBox(height: 8),
+              Text('입력된 비밀번호: $_passwordDisplay'),
+            ],
             const SizedBox(height: 16),
             OutlinedButton(
               onPressed: _checkKeyboardStatus,
@@ -106,6 +147,30 @@ class _LoginPageState extends State<LoginPage> {
             Text(
               'Keyboard: $_keyboardStatus',
               style: Theme.of(context).textTheme.titleMedium,
+            ),
+            const SizedBox(height: 24),
+            const Divider(),
+            const SizedBox(height: 16),
+            TextField(
+              controller: _imeTestController,
+              focusNode: _imeTestFocusNode,
+              decoration: const InputDecoration(
+                labelText: 'IME 비활성화 테스트 (Windows only)',
+                helperText: '포커스 시 한글 입력 불가',
+                border: OutlineInputBorder(),
+              ),
+            ),
+            const SizedBox(height: 24),
+            const Divider(),
+            const SizedBox(height: 16),
+            TextField(
+              controller: _inputSourceTestController,
+              focusNode: _inputSourceTestFocusNode,
+              decoration: InputDecoration(
+                labelText: '한영전환 감지 테스트',
+                helperText: '포커스 중 한영전환 감지: $_inputSourceStatus',
+                border: const OutlineInputBorder(),
+              ),
             ),
           ],
         ),

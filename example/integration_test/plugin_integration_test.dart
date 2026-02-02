@@ -8,11 +8,8 @@
 
 import 'package:flutter_ime/flutter_ime.dart';
 import 'package:flutter_test/flutter_test.dart';
-import 'package:integration_test/integration_test.dart';
 
 void main() {
-  IntegrationTestWidgetsFlutterBinding.ensureInitialized();
-
   testWidgets('setEnglishKeyboard test', (WidgetTester tester) async {
     // set ime english
     await setEnglishKeyboard();

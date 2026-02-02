@@ -8,6 +8,7 @@ A Flutter plugin for controlling IME (Input Method Editor) state. This plugin he
 
 * Switch to English keyboard mode programmatically on Windows and macOS
 * Check current keyboard input mode
+* Disable/Enable IME completely (Windows only)
 * Automatic IME mode switching for password fields
 * Native API implementation (Windows IMM32, macOS Carbon)
 
@@ -17,7 +18,7 @@ Add this to your package's `pubspec.yaml` file:
 
 ```yaml
 dependencies:
-  flutter_ime: ^2.0.0
+  flutter_ime: ^2.1.0
 ```
 
 ## Usage
@@ -30,16 +31,17 @@ await setEnglishKeyboard();
 
 // Check if current keyboard is English
 bool isEnglish = await isEnglishKeyboard();
+
+// Disable IME completely (Windows only)
+await disableIME();
+
+// Enable IME again (Windows only)
+await enableIME();
 ```
 
 ### Automatic Password Field Example
 
 ```dart
-class LoginPage extends StatefulWidget {
-  @override
-  _LoginPageState createState() => _LoginPageState();
-}
-
 class _LoginPageState extends State<LoginPage> {
   final _passwordFocusNode = FocusNode();
 
@@ -60,23 +62,60 @@ class _LoginPageState extends State<LoginPage> {
     return TextField(
       focusNode: _passwordFocusNode,
       obscureText: true,
-      decoration: InputDecoration(
-        labelText: 'Password',
-      ),
+      decoration: InputDecoration(labelText: 'Password'),
     );
   }
 }
 ```
 
-## Additional information
+### Disable IME Example (Windows only)
 
-### Platform Support
+```dart
+class _MyPageState extends State<MyPage> {
+  final _focusNode = FocusNode();
 
-* Windows - ✅ Fully supported
-* macOS - ✅ Fully supported
-* Other platforms - ❌ Not supported
+  @override
+  void initState() {
+    super.initState();
 
-### Requirements
+    // Disable IME on focus, enable on unfocus
+    _focusNode.addListener(() {
+      if (_focusNode.hasFocus) {
+        disableIME();
+      } else {
+        enableIME();
+      }
+    });
+  }
+
+  @override
+  Widget build(BuildContext context) {
+    return TextField(
+      focusNode: _focusNode,
+      decoration: InputDecoration(labelText: 'English only'),
+    );
+  }
+}
+```
+
+## API Reference
+
+| Function | Description | Platform |
+|----------|-------------|----------|
+| `setEnglishKeyboard()` | Switch to English keyboard | Windows, macOS |
+| `isEnglishKeyboard()` | Check if current keyboard is English | Windows, macOS |
+| `disableIME()` | Disable IME (prevents non-English input) | Windows only |
+| `enableIME()` | Enable IME (restores input method) | Windows only |
+
+## Platform Support
+
+| Platform | `setEnglishKeyboard` | `isEnglishKeyboard` | `disableIME` / `enableIME` |
+|----------|---------------------|---------------------|---------------------------|
+| Windows  | ✅ | ✅ | ✅ |
+| macOS    | ✅ | ✅ | ❌ |
+| Others   | ❌ | ❌ | ❌ |
+
+## Requirements
 
 * Windows 7 or later (for Windows)
 * macOS 10.10 or later (for macOS)
