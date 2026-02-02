@@ -1,8 +1,14 @@
 name: flutter_ime
-description: "IME(Input Method Editor) controller for Flutter. Supports Windows and macOS. Provides functionality to switch between Korean and English input modes."
+description: "A Flutter plugin for controlling IME (Input Method Editor) state. Switch to English keyboard, detect input source changes, and monitor Caps Lock state on Windows and macOS."
 version: 2.1.1
 homepage: "https://github.com/kihyun1998/flutter_ime"
 repository: https://github.com/kihyun1998/flutter_ime
+topics:
+  - ime
+  - keyboard
+  - input-method
+  - windows
+  - macos
 
 environment:
   sdk: ">=3.0.0 <4.0.0"
