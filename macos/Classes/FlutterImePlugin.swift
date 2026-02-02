@@ -4,7 +4,7 @@ import Carbon
 
 public class FlutterImePlugin: NSObject, FlutterPlugin, FlutterStreamHandler {
   private var eventSink: FlutterEventSink?
-  private var capsLockEventSink: FlutterEventSink?
+  fileprivate var capsLockEventSink: FlutterEventSink?
   private var lastCapsLockState: Bool = false
   private var flagsChangedMonitor: Any?
 

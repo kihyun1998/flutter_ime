@@ -2,6 +2,7 @@
 
 * **feat**: Add `getCurrentInputSource()` to get current keyboard input source ID (Windows, macOS)
 * **feat**: Add `setInputSource()` to restore previously saved input source (Windows, macOS)
+* **fix**: Fix macOS build error due to `capsLockEventSink` private access level
 
 ## 2.1.0
 
