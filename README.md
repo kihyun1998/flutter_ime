@@ -20,7 +20,7 @@ Add this to your package's `pubspec.yaml` file:
 
 ```yaml
 dependencies:
-  flutter_ime: ^2.1.0
+  flutter_ime: ^2.1.1
 ```
 
 ## Usage
@@ -52,6 +52,16 @@ bool capsLock = await isCapsLockOn();
 onCapsLockChanged().listen((isOn) {
   print('Caps Lock: ${isOn ? "ON" : "OFF"}');
 });
+
+// Get current input source ID (Windows, macOS)
+String? inputSource = await getCurrentInputSource();
+// macOS: "com.apple.keylayout.ABC", "com.apple.inputmethod.Korean.2SetKorean"
+// Windows: "00000412:1:0" (KLID:conversion:sentence)
+
+// Restore saved input source (Windows, macOS)
+if (inputSource != null) {
+  await setInputSource(inputSource);
+}
 ```
 
 ### Automatic Password Field Example
@@ -165,6 +175,58 @@ class _MyPageState extends State<MyPage> {
 }
 ```
 
+### Save and Restore Input Source Example (Windows, macOS)
+
+Save the keyboard state before switching to English, then restore it when the field loses focus:
+
+```dart
+class _MyPageState extends State<MyPage> {
+  final _focusNode = FocusNode();
+  StreamSubscription<bool>? _subscription;
+  String? _savedInputSource;
+
+  @override
+  void initState() {
+    super.initState();
+
+    _focusNode.addListener(() async {
+      if (_focusNode.hasFocus) {
+        // Save current keyboard before switching to English
+        _savedInputSource = await getCurrentInputSource();
+        setEnglishKeyboard();
+        // Keep English while focused
+        _subscription = onInputSourceChanged().listen((isEnglish) {
+          if (!isEnglish) {
+            setEnglishKeyboard();
+          }
+        });
+      } else {
+        _subscription?.cancel();
+        _subscription = null;
+        // Restore previous keyboard (no isEnglish check needed - more efficient)
+        if (_savedInputSource != null) {
+          await setInputSource(_savedInputSource!);
+        }
+      }
+    });
+  }
+
+  @override
+  void dispose() {
+    _subscription?.cancel();
+    super.dispose();
+  }
+
+  @override
+  Widget build(BuildContext context) {
+    return TextField(
+      focusNode: _focusNode,
+      decoration: InputDecoration(labelText: 'English only'),
+    );
+  }
+}
+```
+
 ### Caps Lock Warning Example (Windows, macOS)
 
 ```dart
@@ -230,6 +292,8 @@ class _LoginPageState extends State<LoginPage> {
 |----------|-------------|----------|
 | `setEnglishKeyboard()` | Switch to English keyboard | Windows, macOS |
 | `isEnglishKeyboard()` | Check if current keyboard is English | Windows, macOS |
+| `getCurrentInputSource()` | Get current input source ID | Windows, macOS |
+| `setInputSource(sourceId)` | Set input source by ID | Windows, macOS |
 | `disableIME()` | Disable IME (prevents non-English input) | Windows only |
 | `enableIME()` | Enable IME (restores input method) | Windows only |
 | `onInputSourceChanged()` | Stream that emits when keyboard layout changes | Windows, macOS |
@@ -238,11 +302,11 @@ class _LoginPageState extends State<LoginPage> {
 
 ## Platform Support
 
-| Platform | `setEnglishKeyboard` | `isEnglishKeyboard` | `disableIME` / `enableIME` | `onInputSourceChanged` | `isCapsLockOn` | `onCapsLockChanged` |
-|----------|---------------------|---------------------|---------------------------|------------------------|----------------|---------------------|
-| Windows  | ✅ | ✅ | ✅ | ✅ | ✅ | ✅ |
-| macOS    | ✅ | ✅ | ❌ | ✅ | ✅ | ✅ |
-| Others   | ❌ | ❌ | ❌ | ❌ | ❌ | ❌ |
+| Platform | `setEnglishKeyboard` | `isEnglishKeyboard` | `getCurrentInputSource` | `setInputSource` | `disableIME` / `enableIME` | `onInputSourceChanged` | `isCapsLockOn` | `onCapsLockChanged` |
+|----------|---------------------|---------------------|------------------------|------------------|---------------------------|------------------------|----------------|---------------------|
+| Windows  | ✅ | ✅ | ✅ | ✅ | ✅ | ✅ | ✅ | ✅ |
+| macOS    | ✅ | ✅ | ✅ | ✅ | ❌ | ✅ | ✅ | ✅ |
+| Others   | ❌ | ❌ | ❌ | ❌ | ❌ | ❌ | ❌ | ❌ |
 
 ## Requirements
 

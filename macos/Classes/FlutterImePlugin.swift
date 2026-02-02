@@ -55,6 +55,20 @@ public class FlutterImePlugin: NSObject, FlutterPlugin, FlutterStreamHandler {
       }
     case "isEnglishKeyboard":
       result(isEnglishKeyboard())
+    case "getCurrentInputSource":
+      result(getCurrentInputSource())
+    case "setInputSource":
+      guard let args = call.arguments as? [String: Any],
+            let sourceId = args["sourceId"] as? String else {
+        result(FlutterError(code: "INVALID_ARGUMENT", message: "sourceId is required", details: nil))
+        return
+      }
+      let success = setInputSource(sourceId)
+      if success {
+        result(nil)
+      } else {
+        result(FlutterError(code: "IME_ERROR", message: "Failed to set input source: \(sourceId)", details: nil))
+      }
     case "getPlatformVersion":
       result("macOS " + ProcessInfo.processInfo.operatingSystemVersionString)
     case "disableIME", "enableIME":
@@ -103,6 +117,34 @@ public class FlutterImePlugin: NSObject, FlutterPlugin, FlutterStreamHandler {
     // Common English keyboard IDs: ABC, US, etc.
     return currentID.contains("com.apple.keylayout.ABC") ||
            currentID.contains("com.apple.keylayout.US")
+  }
+
+  /// Get current input source ID
+  private func getCurrentInputSource() -> String? {
+    guard let currentSource = TISCopyCurrentKeyboardInputSource()?.takeRetainedValue() else {
+      return nil
+    }
+
+    guard let sourceID = TISGetInputSourceProperty(currentSource, kTISPropertyInputSourceID) else {
+      return nil
+    }
+
+    return Unmanaged<CFString>.fromOpaque(sourceID).takeUnretainedValue() as String
+  }
+
+  /// Set input source by ID
+  private func setInputSource(_ sourceId: String) -> Bool {
+    let filter = [kTISPropertyInputSourceID: sourceId] as CFDictionary
+
+    guard let sourceList = TISCreateInputSourceList(filter, false)?.takeRetainedValue() as? [TISInputSource],
+          let inputSource = sourceList.first else {
+      return false
+    }
+
+    TISEnableInputSource(inputSource)
+    let status = TISSelectInputSource(inputSource)
+
+    return status == noErr
   }
 
   /// Check if Caps Lock is on

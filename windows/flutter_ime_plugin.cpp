@@ -224,6 +224,35 @@ void FlutterImePlugin::HandleMethodCall(
     }
   } else if(method_call.method_name().compare("isCapsLockOn")==0){
     result->Success(flutter::EncodableValue(IsCapsLockOn()));
+  } else if(method_call.method_name().compare("getCurrentInputSource")==0){
+    std::string source = GetCurrentInputSource();
+    if(!source.empty()){
+      result->Success(flutter::EncodableValue(source));
+    }else{
+      result->Success(flutter::EncodableValue());
+    }
+  } else if(method_call.method_name().compare("setInputSource")==0){
+    const auto* args = std::get_if<flutter::EncodableMap>(method_call.arguments());
+    if(args){
+      auto it = args->find(flutter::EncodableValue("sourceId"));
+      if(it != args->end()){
+        const auto* sourceId = std::get_if<std::string>(&it->second);
+        if(sourceId){
+          bool success = SetInputSource(*sourceId);
+          if(success){
+            result->Success();
+          }else{
+            result->Error("IME_ERROR","Failed to set input source");
+          }
+        }else{
+          result->Error("INVALID_ARGUMENT","sourceId must be a string");
+        }
+      }else{
+        result->Error("INVALID_ARGUMENT","sourceId is required");
+      }
+    }else{
+      result->Error("INVALID_ARGUMENT","Arguments must be a map");
+    }
   } else {
     result->NotImplemented();
   }
@@ -306,6 +335,80 @@ bool FlutterImePlugin::EnableIME(){
 bool FlutterImePlugin::IsCapsLockOn(){
   // GetKeyState low-order bit is 1 when Caps Lock is toggled on
   return (GetKeyState(VK_CAPITAL) & 0x0001) != 0;
+}
+
+/// Get current input source (KLID:conversion:sentence format)
+std::string FlutterImePlugin::GetCurrentInputSource(){
+  HWND hwnd = GetFlutterViewHwnd();
+  if(!hwnd) return "";
+
+  // Get keyboard layout name (KLID)
+  char klid[KL_NAMELENGTH];
+  if(!GetKeyboardLayoutNameA(klid)){
+    return "";
+  }
+
+  // Get IME conversion status
+  HIMC imc = ImmGetContext(hwnd);
+  if(!imc){
+    // Return KLID only if no IME context
+    return std::string(klid);
+  }
+
+  DWORD conversion = 0;
+  DWORD sentence = 0;
+  ImmGetConversionStatus(imc, &conversion, &sentence);
+  ImmReleaseContext(hwnd, imc);
+
+  // Format: KLID:conversion:sentence
+  std::ostringstream oss;
+  oss << klid << ":" << conversion << ":" << sentence;
+  return oss.str();
+}
+
+/// Set input source from saved state (KLID:conversion:sentence format)
+bool FlutterImePlugin::SetInputSource(const std::string& sourceId){
+  if(sourceId.empty()) return false;
+
+  HWND hwnd = GetFlutterViewHwnd();
+  if(!hwnd) return false;
+
+  // Parse sourceId (format: KLID or KLID:conversion:sentence)
+  std::string klid;
+  DWORD conversion = 0;
+  DWORD sentence = 0;
+  bool hasConversion = false;
+
+  size_t firstColon = sourceId.find(':');
+  if(firstColon == std::string::npos){
+    // KLID only
+    klid = sourceId;
+  }else{
+    klid = sourceId.substr(0, firstColon);
+    size_t secondColon = sourceId.find(':', firstColon + 1);
+    if(secondColon != std::string::npos){
+      conversion = std::stoul(sourceId.substr(firstColon + 1, secondColon - firstColon - 1));
+      sentence = std::stoul(sourceId.substr(secondColon + 1));
+      hasConversion = true;
+    }
+  }
+
+  // Load and activate keyboard layout
+  HKL hkl = LoadKeyboardLayoutA(klid.c_str(), KLF_ACTIVATE);
+  if(!hkl){
+    return false;
+  }
+
+  // Set IME conversion status if available
+  if(hasConversion){
+    HIMC imc = ImmGetContext(hwnd);
+    if(imc){
+      ImmSetConversionStatus(imc, conversion, sentence);
+      ImmReleaseContext(hwnd, imc);
+    }
+  }
+
+  return true;
 }
 
 }  // namespace flutter_ime

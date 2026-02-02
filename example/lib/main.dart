@@ -506,40 +506,64 @@ class ForceEnglishPage extends StatefulWidget {
 }
 
 class _ForceEnglishPageState extends State<ForceEnglishPage> {
+  // 현재 input source 확인용
+  final _testController = TextEditingController();
+  String? _currentInputSource;
+
+  // 영어 강제 TextField용
   final _controller = TextEditingController();
   final _focusNode = FocusNode();
   StreamSubscription<bool>? _subscription;
   bool _isActive = false;
+  String? _savedInputSource;
 
   @override
   void initState() {
     super.initState();
     _focusNode.addListener(_onFocusChanged);
+    _refreshInputSource();
   }
 
-  void _onFocusChanged() {
+  Future<void> _refreshInputSource() async {
+    final source = await getCurrentInputSource();
+    setState(() {
+      _currentInputSource = source;
+    });
+  }
+
+  void _onFocusChanged() async {
     if (_focusNode.hasFocus) {
+      // 현재 키보드 저장 후 영어로 전환
+      _savedInputSource = await getCurrentInputSource();
       setEnglishKeyboard();
       _subscription = onInputSourceChanged().listen((isEnglish) {
         if (!isEnglish) {
           setEnglishKeyboard();
         }
+        _refreshInputSource();
       });
       setState(() {
         _isActive = true;
       });
+      _refreshInputSource();
     } else {
       _subscription?.cancel();
       _subscription = null;
+      // 저장했던 키보드로 복원 (isEnglish 체크 없이 바로 set - 비용 절감)
+      if (_savedInputSource != null) {
+        await setInputSource(_savedInputSource!);
+      }
       setState(() {
         _isActive = false;
       });
+      _refreshInputSource();
     }
   }
 
   @override
   void dispose() {
     _subscription?.cancel();
+    _testController.dispose();
     _controller.dispose();
     _focusNode.dispose();
     super.dispose();
@@ -559,8 +583,8 @@ class _ForceEnglishPageState extends State<ForceEnglishPage> {
           const SizedBox(height: 8),
           Text(
             '포커스 중 한영전환을 해도 자동으로 영어로 되돌립니다.\n'
-            'macOS에서 IME 비활성화 대신 사용합니다.\n'
-            'API: setEnglishKeyboard() + onInputSourceChanged()',
+            '포커스 해제 시 이전 키보드로 자동 복원됩니다.\n'
+            'API: getCurrentInputSource(), setInputSource(), setEnglishKeyboard()',
             style: Theme.of(context).textTheme.bodyMedium?.copyWith(
                   color: Colors.grey[600],
                 ),
@@ -578,6 +602,72 @@ class _ForceEnglishPageState extends State<ForceEnglishPage> {
             ),
           ),
           const SizedBox(height: 24),
+
+          // 현재 Input Source 표시
+          Card(
+            child: Padding(
+              padding: const EdgeInsets.all(16),
+              child: Column(
+                crossAxisAlignment: CrossAxisAlignment.start,
+                children: [
+                  Row(
+                    children: [
+                      const Icon(Icons.info_outline, size: 20),
+                      const SizedBox(width: 8),
+                      Text(
+                        '현재 Input Source',
+                        style: Theme.of(context).textTheme.titleSmall,
+                      ),
+                      const Spacer(),
+                      IconButton(
+                        icon: const Icon(Icons.refresh, size: 20),
+                        onPressed: _refreshInputSource,
+                        tooltip: '새로고침',
+                      ),
+                    ],
+                  ),
+                  const SizedBox(height: 8),
+                  SelectableText(
+                    _currentInputSource ?? '(알 수 없음)',
+                    style: TextStyle(
+                      fontFamily: 'monospace',
+                      fontSize: 12,
+                      color: Colors.grey[700],
+                    ),
+                  ),
+                  if (_savedInputSource != null) ...[
+                    const SizedBox(height: 8),
+                    Text(
+                      '저장된 값: $_savedInputSource',
+                      style: TextStyle(
+                        fontFamily: 'monospace',
+                        fontSize: 11,
+                        color: Colors.blue[600],
+                      ),
+                    ),
+                  ],
+                ],
+              ),
+            ),
+          ),
+          const SizedBox(height: 16),
+
+          // 테스트용 일반 TextField
+          SizedBox(
+            width: 300,
+            child: TextField(
+              controller: _testController,
+              decoration: const InputDecoration(
+                labelText: '일반 TextField (테스트용)',
+                helperText: '한글 입력 가능',
+                border: OutlineInputBorder(),
+              ),
+              onTap: _refreshInputSource,
+            ),
+          ),
+          const SizedBox(height: 16),
+
+          // 영어 강제 TextField
           if (_isActive)
             Container(
               margin: const EdgeInsets.only(bottom: 12),
@@ -605,7 +695,7 @@ class _ForceEnglishPageState extends State<ForceEnglishPage> {
               focusNode: _focusNode,
               decoration: const InputDecoration(
                 labelText: '영어만 입력 가능',
-                helperText: '한영전환해도 영어로 되돌아옴',
+                helperText: '포커스 해제 시 이전 키보드로 복원',
                 border: OutlineInputBorder(),
               ),
               inputFormatters: [

@@ -40,6 +40,19 @@ class MethodChannelFlutterIme extends FlutterImePlatform {
   }
 
   @override
+  Future<String?> getCurrentInputSource() async {
+    final result =
+        await methodChannel.invokeMethod<String>('getCurrentInputSource');
+    return result;
+  }
+
+  @override
+  Future<void> setInputSource(String sourceId) async {
+    await methodChannel
+        .invokeMethod<void>('setInputSource', {'sourceId': sourceId});
+  }
+
+  @override
   Future<void> disableIME() async {
     await methodChannel.invokeMethod<void>('disableIME');
   }

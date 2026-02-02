@@ -30,6 +30,16 @@ abstract class FlutterImePlatform extends PlatformInterface {
     throw UnimplementedError('isEnglishKeyboard() must be implemented');
   }
 
+  /// Gets the current input source ID (macOS only).
+  Future<String?> getCurrentInputSource() async {
+    throw UnimplementedError('getCurrentInputSource() must be implemented');
+  }
+
+  /// Sets the input source by ID (macOS only).
+  Future<void> setInputSource(String sourceId) async {
+    throw UnimplementedError('setInputSource() must be implemented');
+  }
+
   /// Disables IME (Windows only).
   Future<void> disableIME() async {
     throw UnimplementedError('disableIME() must be implemented');

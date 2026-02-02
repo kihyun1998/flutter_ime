@@ -1,3 +1,8 @@
+## 2.1.1
+
+* **feat**: Add `getCurrentInputSource()` to get current keyboard input source ID (Windows, macOS)
+* **feat**: Add `setInputSource()` to restore previously saved input source (Windows, macOS)
+
 ## 2.1.0
 
 * **feat**: Add `disableIME()` and `enableIME()` functions (Windows only)

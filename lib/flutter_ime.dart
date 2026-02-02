@@ -63,6 +63,83 @@ Future<bool> isEnglishKeyboard() async {
   return FlutterImePlatform.instance.isEnglishKeyboard();
 }
 
+/// Gets the current input source ID.
+///
+/// Returns the unique identifier of the currently active keyboard input source.
+/// This can be saved and later restored using [setInputSource].
+///
+/// ## Platform Support
+/// - **macOS**: Returns input source ID (e.g., "com.apple.keylayout.ABC",
+///   "com.apple.inputmethod.Korean.2SetKorean")
+/// - **Windows**: Returns keyboard layout and IME state in format "KLID:conversion:sentence"
+///   (e.g., "00000412:1:0" for Korean keyboard in Hangul mode)
+/// - **Other platforms**: Returns `null`
+///
+/// ## Returns
+/// - Input source ID string on supported platforms
+/// - `null` on unsupported platforms or if unable to get input source
+///
+/// ## Example
+/// ```dart
+/// // Save current keyboard before switching to English
+/// final savedInputSource = await getCurrentInputSource();
+/// await setEnglishKeyboard();
+///
+/// // Later, restore the previous keyboard
+/// if (savedInputSource != null) {
+///   await setInputSource(savedInputSource);
+/// }
+/// ```
+///
+/// See also:
+/// - [setInputSource] to restore a saved input source
+/// - [setEnglishKeyboard] to switch to English mode
+Future<String?> getCurrentInputSource() async {
+  if (!Platform.isWindows && !Platform.isMacOS) return null;
+
+  return FlutterImePlatform.instance.getCurrentInputSource();
+}
+
+/// Sets the keyboard input source by its ID.
+///
+/// Use this to restore a previously saved input source from [getCurrentInputSource].
+///
+/// ## Platform Support
+/// - **macOS**: Sets the input source using Carbon Text Input Source Services API
+/// - **Windows**: Sets keyboard layout and IME conversion mode
+/// - **Other platforms**: Does nothing (no-op)
+///
+/// ## Parameters
+/// - [sourceId]: The input source ID to activate
+///   - macOS: e.g., "com.apple.keylayout.ABC"
+///   - Windows: e.g., "00000412:1:0" (KLID:conversion:sentence)
+///
+/// ## Example
+/// ```dart
+/// // Save and restore keyboard around English-only input
+/// String? savedInputSource;
+///
+/// focusNode.addListener(() async {
+///   if (focusNode.hasFocus) {
+///     savedInputSource = await getCurrentInputSource();
+///     await setEnglishKeyboard();
+///   } else {
+///     if (savedInputSource != null) {
+///       await setInputSource(savedInputSource!);
+///     }
+///   }
+/// });
+/// ```
+///
+/// See also:
+/// - [getCurrentInputSource] to get the current input source ID
+/// - [setEnglishKeyboard] to switch to English mode
+Future<void> setInputSource(String sourceId) async {
+  if (!Platform.isWindows && !Platform.isMacOS) return;
+
+  await FlutterImePlatform.instance.setInputSource(sourceId);
+}
+
 /// Disables IME completely, preventing non-English input.
 ///
 /// Unlike [setEnglishKeyboard], this completely blocks IME functionality,

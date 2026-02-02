@@ -36,6 +36,8 @@ class FlutterImePlugin : public flutter::Plugin {
   bool DisableIME();
   bool EnableIME();
   bool IsCapsLockOn();
+  std::string GetCurrentInputSource();
+  bool SetInputSource(const std::string& sourceId);
 
  private:
   // Get Flutter view HWND
