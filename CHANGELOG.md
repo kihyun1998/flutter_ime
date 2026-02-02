@@ -3,6 +3,8 @@
 * **feat**: Add `disableIME()` and `enableIME()` functions (Windows only)
 * **feat**: Disable IME to prevent non-English input on focused TextField
 * **feat**: Add `onInputSourceChanged()` stream to detect keyboard layout changes (Windows, macOS)
+* **feat**: Add `isCapsLockOn()` to check Caps Lock state (Windows, macOS)
+* **feat**: Add `onCapsLockChanged()` stream to detect Caps Lock state changes (Windows, macOS)
 * **fix**: Fix `isEnglishKeyboard()` always returning false due to incorrect flag check
 
 ## 2.0.0

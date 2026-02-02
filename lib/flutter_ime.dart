@@ -64,3 +64,33 @@ Stream<bool> onInputSourceChanged() {
 
   return FlutterImePlatform.instance.onInputSourceChanged;
 }
+
+/// Check if Caps Lock is currently on
+///
+/// Supported platforms: Windows, macOS
+///
+/// Returns:
+/// - `true`: Caps Lock is on
+/// - `false`: Caps Lock is off or platform is not supported
+Future<bool> isCapsLockOn() async {
+  if (!Platform.isWindows && !Platform.isMacOS) return false;
+
+  return FlutterImePlatform.instance.isCapsLockOn();
+}
+
+/// Stream that emits when Caps Lock state changes
+///
+/// Supported platforms: Windows, macOS
+///
+/// Emits:
+/// - `true`: Caps Lock turned on
+/// - `false`: Caps Lock turned off
+///
+/// Returns empty stream on unsupported platforms.
+Stream<bool> onCapsLockChanged() {
+  if (!Platform.isWindows && !Platform.isMacOS) {
+    return const Stream.empty();
+  }
+
+  return FlutterImePlatform.instance.onCapsLockChanged;
+}

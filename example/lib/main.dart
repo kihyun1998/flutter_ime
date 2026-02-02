@@ -51,16 +51,14 @@ class _LoginPageState extends State<LoginPage> {
   // macOS IME 비활성화용
   StreamSubscription<bool>? _macosImeSubscription;
 
+  // Caps Lock 상태
+  StreamSubscription<bool>? _capsLockSubscription;
+  bool _isCapsLockOn = false;
+
   @override
   void initState() {
     super.initState();
 
-    // 비밀번호 필드가 포커스를 받으면 영어 키보드로 변경
-    _passwordFocusNode.addListener(() {
-      if (_passwordFocusNode.hasFocus) {
-        setEnglishKeyboard();
-      }
-    });
 
     // IME 테스트 필드: 포커스 시 IME 비활성화, 포커스 해제 시 활성화
     _imeTestFocusNode.addListener(() {
@@ -96,6 +94,37 @@ class _LoginPageState extends State<LoginPage> {
         _macosImeSubscription = null;
       }
     });
+
+    // 비밀번호 필드 포커스 시에만 Caps Lock 감지
+    _passwordFocusNode.addListener(_onPasswordFocusChanged);
+  }
+
+  void _onPasswordFocusChanged() async {
+    if (_passwordFocusNode.hasFocus) {
+      // 포커스 시 영어 키보드로 변경 + Caps Lock 상태 확인
+      setEnglishKeyboard();
+
+      // 현재 Caps Lock 상태 확인
+      final capsLock = await isCapsLockOn();
+      setState(() {
+        _isCapsLockOn = capsLock;
+      });
+
+      // 변경 감지 구독 시작
+      _capsLockSubscription = onCapsLockChanged().listen((isOn) {
+        debugPrint('>>> Caps Lock 상태 변경: ${isOn ? "ON" : "OFF"}');
+        setState(() {
+          _isCapsLockOn = isOn;
+        });
+      });
+    } else {
+      // 포커스 해제 시 구독 취소 및 상태 초기화
+      _capsLockSubscription?.cancel();
+      _capsLockSubscription = null;
+      setState(() {
+        _isCapsLockOn = false;
+      });
+    }
   }
 
   Future<void> _checkKeyboardStatus() async {
@@ -109,6 +138,7 @@ class _LoginPageState extends State<LoginPage> {
   void dispose() {
     _inputSourceSubscription?.cancel();
     _macosImeSubscription?.cancel();
+    _capsLockSubscription?.cancel();
     _emailController.dispose();
     _passwordController.dispose();
     _imeTestController.dispose();
@@ -150,12 +180,26 @@ class _LoginPageState extends State<LoginPage> {
             TextField(
               controller: _passwordController,
               focusNode: _passwordFocusNode,
-              decoration: const InputDecoration(
+              decoration: InputDecoration(
                 labelText: '비밀번호',
-                border: OutlineInputBorder(),
+                border: const OutlineInputBorder(),
+                suffixIcon: _isCapsLockOn
+                    ? const Tooltip(
+                        message: 'Caps Lock이 켜져 있습니다',
+                        child: Icon(Icons.keyboard_capslock, color: Colors.orange),
+                      )
+                    : null,
               ),
               obscureText: true,
             ),
+            if (_isCapsLockOn)
+              const Padding(
+                padding: EdgeInsets.only(top: 4),
+                child: Text(
+                  'Caps Lock이 켜져 있습니다',
+                  style: TextStyle(color: Colors.orange, fontSize: 12),
+                ),
+              ),
             const SizedBox(height: 24),
             ElevatedButton(
               onPressed: _onLogin,

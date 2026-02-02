@@ -10,6 +10,7 @@ A Flutter plugin for controlling IME (Input Method Editor) state. This plugin he
 * Check current keyboard input mode
 * Disable/Enable IME completely (Windows only)
 * Detect keyboard layout changes in real-time (Windows, macOS)
+* Detect Caps Lock state and changes (Windows, macOS)
 * Automatic IME mode switching for password fields
 * Native API implementation (Windows IMM32, macOS Carbon)
 
@@ -42,6 +43,14 @@ await enableIME();
 // Listen for keyboard layout changes (Windows, macOS)
 onInputSourceChanged().listen((isEnglish) {
   print('Keyboard changed to: ${isEnglish ? "English" : "Non-English"}');
+});
+
+// Check if Caps Lock is on (Windows, macOS)
+bool capsLock = await isCapsLockOn();
+
+// Listen for Caps Lock state changes (Windows, macOS)
+onCapsLockChanged().listen((isOn) {
+  print('Caps Lock: ${isOn ? "ON" : "OFF"}');
 });
 ```
 
@@ -156,6 +165,65 @@ class _MyPageState extends State<MyPage> {
 }
 ```
 
+### Caps Lock Warning Example (Windows, macOS)
+
+```dart
+class _LoginPageState extends State<LoginPage> {
+  final _passwordFocusNode = FocusNode();
+  StreamSubscription<bool>? _capsLockSubscription;
+  bool _isCapsLockOn = false;
+
+  @override
+  void initState() {
+    super.initState();
+
+    _passwordFocusNode.addListener(() async {
+      if (_passwordFocusNode.hasFocus) {
+        // Check current Caps Lock state
+        final capsLock = await isCapsLockOn();
+        setState(() => _isCapsLockOn = capsLock);
+
+        // Listen for Caps Lock changes while focused
+        _capsLockSubscription = onCapsLockChanged().listen((isOn) {
+          setState(() => _isCapsLockOn = isOn);
+        });
+      } else {
+        // Stop listening when unfocused
+        _capsLockSubscription?.cancel();
+        _capsLockSubscription = null;
+        setState(() => _isCapsLockOn = false);
+      }
+    });
+  }
+
+  @override
+  void dispose() {
+    _capsLockSubscription?.cancel();
+    super.dispose();
+  }
+
+  @override
+  Widget build(BuildContext context) {
+    return Column(
+      children: [
+        TextField(
+          focusNode: _passwordFocusNode,
+          obscureText: true,
+          decoration: InputDecoration(
+            labelText: 'Password',
+            suffixIcon: _isCapsLockOn
+                ? Icon(Icons.keyboard_capslock, color: Colors.orange)
+                : null,
+          ),
+        ),
+        if (_isCapsLockOn)
+          Text('Caps Lock is ON', style: TextStyle(color: Colors.orange)),
+      ],
+    );
+  }
+}
+```
+
 ## API Reference
 
 | Function | Description | Platform |
@@ -165,14 +233,16 @@ class _MyPageState extends State<MyPage> {
 | `disableIME()` | Disable IME (prevents non-English input) | Windows only |
 | `enableIME()` | Enable IME (restores input method) | Windows only |
 | `onInputSourceChanged()` | Stream that emits when keyboard layout changes | Windows, macOS |
+| `isCapsLockOn()` | Check if Caps Lock is currently on | Windows, macOS |
+| `onCapsLockChanged()` | Stream that emits when Caps Lock state changes | Windows, macOS |
 
 ## Platform Support
 
-| Platform | `setEnglishKeyboard` | `isEnglishKeyboard` | `disableIME` / `enableIME` | `onInputSourceChanged` |
-|----------|---------------------|---------------------|---------------------------|------------------------|
-| Windows  | ✅ | ✅ | ✅ | ✅ |
-| macOS    | ✅ | ✅ | ❌ | ✅ |
-| Others   | ❌ | ❌ | ❌ | ❌ |
+| Platform | `setEnglishKeyboard` | `isEnglishKeyboard` | `disableIME` / `enableIME` | `onInputSourceChanged` | `isCapsLockOn` | `onCapsLockChanged` |
+|----------|---------------------|---------------------|---------------------------|------------------------|----------------|---------------------|
+| Windows  | ✅ | ✅ | ✅ | ✅ | ✅ | ✅ |
+| macOS    | ✅ | ✅ | ❌ | ✅ | ✅ | ✅ |
+| Others   | ❌ | ❌ | ❌ | ❌ | ❌ | ❌ |
 
 ## Requirements
 

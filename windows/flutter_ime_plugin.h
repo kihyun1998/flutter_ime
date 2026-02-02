@@ -35,6 +35,7 @@ class FlutterImePlugin : public flutter::Plugin {
   bool IsEnglishKeyboard();
   bool DisableIME();
   bool EnableIME();
+  bool IsCapsLockOn();
 
  private:
   // Flutter 뷰의 HWND 가져오기
@@ -57,7 +58,15 @@ class FlutterImePlugin : public flutter::Plugin {
   std::unique_ptr<flutter::EventChannel<flutter::EncodableValue>> event_channel_;
   std::unique_ptr<flutter::EventSink<flutter::EncodableValue>> event_sink_;
 
+  // Caps Lock EventChannel용
+  std::unique_ptr<flutter::EventChannel<flutter::EncodableValue>> caps_lock_event_channel_;
+  std::unique_ptr<flutter::EventSink<flutter::EncodableValue>> caps_lock_event_sink_;
+
   void SendInputSourceChangedEvent(bool is_english);
+  void SendCapsLockChangedEvent(bool is_caps_lock_on);
+
+  // Caps Lock 상태 추적
+  static bool last_caps_lock_state_;
 };
 
 }  // namespace flutter_ime

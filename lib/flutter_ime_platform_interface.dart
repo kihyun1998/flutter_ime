@@ -44,4 +44,14 @@ abstract class FlutterImePlatform extends PlatformInterface {
   Stream<bool> get onInputSourceChanged {
     throw UnimplementedError('onInputSourceChanged must be implemented');
   }
+
+  /// Caps Lock 상태 확인
+  Future<bool> isCapsLockOn() async {
+    throw UnimplementedError('isCapsLockOn() must be implemented');
+  }
+
+  /// Caps Lock 상태 변경 이벤트 스트림
+  Stream<bool> get onCapsLockChanged {
+    throw UnimplementedError('onCapsLockChanged must be implemented');
+  }
 }

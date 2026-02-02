@@ -22,6 +22,7 @@ namespace flutter_ime {
 FlutterImePlugin* FlutterImePlugin::instance_ = nullptr;
 WNDPROC FlutterImePlugin::original_wndproc_ = nullptr;
 bool FlutterImePlugin::ime_disabled_ = false;
+bool FlutterImePlugin::last_caps_lock_state_ = false;
 
 // static
 void FlutterImePlugin::RegisterWithRegistrar(
@@ -60,6 +61,31 @@ void FlutterImePlugin::RegisterWithRegistrar(
       });
 
   plugin->event_channel_->SetStreamHandler(std::move(event_handler));
+
+  // Caps Lock EventChannel 설정
+  plugin->caps_lock_event_channel_ =
+      std::make_unique<flutter::EventChannel<flutter::EncodableValue>>(
+          registrar->messenger(), "flutter_ime/caps_lock_changed",
+          &flutter::StandardMethodCodec::GetInstance());
+
+  auto caps_lock_event_handler = std::make_unique<
+      flutter::StreamHandlerFunctions<flutter::EncodableValue>>(
+      [plugin_pointer = plugin.get()](
+          const flutter::EncodableValue* arguments,
+          std::unique_ptr<flutter::EventSink<flutter::EncodableValue>>&& events)
+          -> std::unique_ptr<flutter::StreamHandlerError<flutter::EncodableValue>> {
+        plugin_pointer->caps_lock_event_sink_ = std::move(events);
+        // 초기 Caps Lock 상태 저장
+        last_caps_lock_state_ = plugin_pointer->IsCapsLockOn();
+        return nullptr;
+      },
+      [plugin_pointer = plugin.get()](const flutter::EncodableValue* arguments)
+          -> std::unique_ptr<flutter::StreamHandlerError<flutter::EncodableValue>> {
+        plugin_pointer->caps_lock_event_sink_ = nullptr;
+        return nullptr;
+      });
+
+  plugin->caps_lock_event_channel_->SetStreamHandler(std::move(caps_lock_event_handler));
 
   registrar->AddPlugin(std::move(plugin));
 }
@@ -101,6 +127,18 @@ LRESULT CALLBACK FlutterImePlugin::WndProcHook(HWND hwnd, UINT message, WPARAM w
     }
   }
 
+  // Caps Lock 상태 변경 감지
+  // WM_KEYDOWN/WM_KEYUP에서 VK_CAPITAL 키 감지
+  if ((message == WM_KEYDOWN || message == WM_KEYUP) && wparam == VK_CAPITAL) {
+    if (instance_) {
+      bool is_caps_lock_on = instance_->IsCapsLockOn();
+      if (is_caps_lock_on != last_caps_lock_state_) {
+        last_caps_lock_state_ = is_caps_lock_on;
+        instance_->SendCapsLockChangedEvent(is_caps_lock_on);
+      }
+    }
+  }
+
   if (ime_disabled_) {
     switch (message) {
       case WM_IME_STARTCOMPOSITION:
@@ -131,6 +169,13 @@ LRESULT CALLBACK FlutterImePlugin::WndProcHook(HWND hwnd, UINT message, WPARAM w
 void FlutterImePlugin::SendInputSourceChangedEvent(bool is_english) {
   if (event_sink_) {
     event_sink_->Success(flutter::EncodableValue(is_english));
+  }
+}
+
+// Caps Lock 상태 변경 이벤트 전송
+void FlutterImePlugin::SendCapsLockChangedEvent(bool is_caps_lock_on) {
+  if (caps_lock_event_sink_) {
+    caps_lock_event_sink_->Success(flutter::EncodableValue(is_caps_lock_on));
   }
 }
 
@@ -177,6 +222,8 @@ void FlutterImePlugin::HandleMethodCall(
     }else{
       result->Error("IME_ERROR","Failed to enable IME");
     }
+  } else if(method_call.method_name().compare("isCapsLockOn")==0){
+    result->Success(flutter::EncodableValue(IsCapsLockOn()));
   } else {
     result->NotImplemented();
   }
@@ -253,6 +300,12 @@ bool FlutterImePlugin::EnableIME(){
   ImmAssociateContextEx(hwnd, nullptr, IACE_DEFAULT);
 
   return true;
+}
+
+/// Check if Caps Lock is on
+bool FlutterImePlugin::IsCapsLockOn(){
+  // GetKeyState의 하위 비트가 1이면 Caps Lock 활성화
+  return (GetKeyState(VK_CAPITAL) & 0x0001) != 0;
 }
 
 }  // namespace flutter_ime
