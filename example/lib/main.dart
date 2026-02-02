@@ -393,7 +393,8 @@ class _InputSourceChangePageState extends State<InputSourceChangePage> {
       final source = isEnglish ? 'English' : 'Korean';
       setState(() {
         _currentSource = source;
-        _history.insert(0, '${DateTime.now().toString().split('.').first} → $source');
+        _history.insert(
+            0, '${DateTime.now().toString().split('.').first} → $source');
         if (_history.length > 10) _history.removeLast();
       });
     });

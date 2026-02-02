@@ -17,7 +17,8 @@ class MethodChannelFlutterIme extends FlutterImePlatform {
 
   /// The event channel instance for Caps Lock changes.
   @visibleForTesting
-  final capsLockEventChannel = const EventChannel('flutter_ime/caps_lock_changed');
+  final capsLockEventChannel =
+      const EventChannel('flutter_ime/caps_lock_changed');
 
   /// Broadcast stream controller for input source changes.
   StreamController<bool>? _streamController;
@@ -50,12 +51,10 @@ class MethodChannelFlutterIme extends FlutterImePlatform {
 
   @override
   Stream<bool> get onInputSourceChanged {
-    if (_streamController == null) {
-      _streamController = StreamController<bool>.broadcast(
-        onListen: _startListening,
-        onCancel: _stopListening,
-      );
-    }
+    _streamController ??= StreamController<bool>.broadcast(
+      onListen: _startListening,
+      onCancel: _stopListening,
+    );
     return _streamController!.stream;
   }
 
@@ -83,17 +82,16 @@ class MethodChannelFlutterIme extends FlutterImePlatform {
 
   @override
   Stream<bool> get onCapsLockChanged {
-    if (_capsLockStreamController == null) {
-      _capsLockStreamController = StreamController<bool>.broadcast(
-        onListen: _startCapsLockListening,
-        onCancel: _stopCapsLockListening,
-      );
-    }
+    _capsLockStreamController ??= StreamController<bool>.broadcast(
+      onListen: _startCapsLockListening,
+      onCancel: _stopCapsLockListening,
+    );
     return _capsLockStreamController!.stream;
   }
 
   void _startCapsLockListening() {
-    _capsLockEventSubscription = capsLockEventChannel.receiveBroadcastStream().listen(
+    _capsLockEventSubscription =
+        capsLockEventChannel.receiveBroadcastStream().listen(
       (event) {
         _capsLockStreamController?.add(event as bool);
       },
