@@ -9,6 +9,7 @@ A Flutter plugin for controlling IME (Input Method Editor) state. This plugin he
 * Switch to English keyboard mode programmatically on Windows and macOS
 * Check current keyboard input mode
 * Disable/Enable IME completely (Windows only)
+* Detect keyboard layout changes in real-time (Windows, macOS)
 * Automatic IME mode switching for password fields
 * Native API implementation (Windows IMM32, macOS Carbon)
 
@@ -37,6 +38,11 @@ await disableIME();
 
 // Enable IME again (Windows only)
 await enableIME();
+
+// Listen for keyboard layout changes (Windows, macOS)
+onInputSourceChanged().listen((isEnglish) {
+  print('Keyboard changed to: ${isEnglish ? "English" : "Non-English"}');
+});
 ```
 
 ### Automatic Password Field Example
@@ -98,6 +104,58 @@ class _MyPageState extends State<MyPage> {
 }
 ```
 
+### Cross-platform English Only Field (Windows, macOS)
+
+For macOS where `disableIME()` is not available, use `onInputSourceChanged()` to detect and revert keyboard changes:
+
+```dart
+class _MyPageState extends State<MyPage> {
+  final _focusNode = FocusNode();
+  StreamSubscription<bool>? _subscription;
+
+  @override
+  void initState() {
+    super.initState();
+
+    _focusNode.addListener(() {
+      if (_focusNode.hasFocus) {
+        // Switch to English on focus
+        setEnglishKeyboard();
+        // Revert to English if user switches to non-English
+        _subscription = onInputSourceChanged().listen((isEnglish) {
+          if (!isEnglish) {
+            setEnglishKeyboard();
+          }
+        });
+      } else {
+        _subscription?.cancel();
+        _subscription = null;
+      }
+    });
+  }
+
+  @override
+  void dispose() {
+    _subscription?.cancel();
+    super.dispose();
+  }
+
+  @override
+  Widget build(BuildContext context) {
+    return TextField(
+      focusNode: _focusNode,
+      decoration: InputDecoration(labelText: 'English only'),
+      // Filter out non-English characters as fallback
+      inputFormatters: [
+        FilteringTextInputFormatter.allow(
+          RegExp(r'[a-zA-Z0-9!@#$%^&*()_+\-=\[\]{};:"\\|,.<>/?`~ ]'),
+        ),
+      ],
+    );
+  }
+}
+```
+
 ## API Reference
 
 | Function | Description | Platform |
@@ -106,14 +164,15 @@ class _MyPageState extends State<MyPage> {
 | `isEnglishKeyboard()` | Check if current keyboard is English | Windows, macOS |
 | `disableIME()` | Disable IME (prevents non-English input) | Windows only |
 | `enableIME()` | Enable IME (restores input method) | Windows only |
+| `onInputSourceChanged()` | Stream that emits when keyboard layout changes | Windows, macOS |
 
 ## Platform Support
 
-| Platform | `setEnglishKeyboard` | `isEnglishKeyboard` | `disableIME` / `enableIME` |
-|----------|---------------------|---------------------|---------------------------|
-| Windows  | ✅ | ✅ | ✅ |
-| macOS    | ✅ | ✅ | ❌ |
-| Others   | ❌ | ❌ | ❌ |
+| Platform | `setEnglishKeyboard` | `isEnglishKeyboard` | `disableIME` / `enableIME` | `onInputSourceChanged` |
+|----------|---------------------|---------------------|---------------------------|------------------------|
+| Windows  | ✅ | ✅ | ✅ | ✅ |
+| macOS    | ✅ | ✅ | ❌ | ✅ |
+| Others   | ❌ | ❌ | ❌ | ❌ |
 
 ## Requirements
 

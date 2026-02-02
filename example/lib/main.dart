@@ -1,6 +1,7 @@
 import 'dart:async';
 
 import 'package:flutter/material.dart';
+import 'package:flutter/services.dart';
 import 'package:flutter_ime/flutter_ime.dart';
 
 void main() {
@@ -35,15 +36,20 @@ class _LoginPageState extends State<LoginPage> {
   final _passwordController = TextEditingController();
   final _imeTestController = TextEditingController();
   final _inputSourceTestController = TextEditingController();
+  final _macosImeTestController = TextEditingController();
   final _passwordFocusNode = FocusNode();
   final _imeTestFocusNode = FocusNode();
   final _inputSourceTestFocusNode = FocusNode();
+  final _macosImeTestFocusNode = FocusNode();
   String _keyboardStatus = 'Unknown';
   String _passwordDisplay = '';
 
   // 한영전환 감지 (포커스 시에만)
   StreamSubscription<bool>? _inputSourceSubscription;
   String _inputSourceStatus = '';
+
+  // macOS IME 비활성화용
+  StreamSubscription<bool>? _macosImeSubscription;
 
   @override
   void initState() {
@@ -72,6 +78,24 @@ class _LoginPageState extends State<LoginPage> {
         _inputSourceStatus = isEnglish ? 'English' : 'Korean';
       });
     });
+
+    // macOS용 IME 비활성화: 포커스 시 영어로 전환 + 한영전환 감지해서 되돌림
+    _macosImeTestFocusNode.addListener(() {
+      if (_macosImeTestFocusNode.hasFocus) {
+        // 포커스 받으면 영어로 전환
+        setEnglishKeyboard();
+        // 한영전환 감지해서 영어로 되돌림
+        _macosImeSubscription = onInputSourceChanged().listen((isEnglish) {
+          if (!isEnglish) {
+            setEnglishKeyboard();
+          }
+        });
+      } else {
+        // 포커스 잃으면 구독 취소
+        _macosImeSubscription?.cancel();
+        _macosImeSubscription = null;
+      }
+    });
   }
 
   Future<void> _checkKeyboardStatus() async {
@@ -84,13 +108,16 @@ class _LoginPageState extends State<LoginPage> {
   @override
   void dispose() {
     _inputSourceSubscription?.cancel();
+    _macosImeSubscription?.cancel();
     _emailController.dispose();
     _passwordController.dispose();
     _imeTestController.dispose();
     _inputSourceTestController.dispose();
+    _macosImeTestController.dispose();
     _passwordFocusNode.dispose();
     _imeTestFocusNode.dispose();
     _inputSourceTestFocusNode.dispose();
+    _macosImeTestFocusNode.dispose();
     super.dispose();
   }
 
@@ -171,6 +198,23 @@ class _LoginPageState extends State<LoginPage> {
                 helperText: '포커스 중 한영전환 감지: $_inputSourceStatus',
                 border: const OutlineInputBorder(),
               ),
+            ),
+            const SizedBox(height: 24),
+            const Divider(),
+            const SizedBox(height: 16),
+            TextField(
+              controller: _macosImeTestController,
+              focusNode: _macosImeTestFocusNode,
+              decoration: const InputDecoration(
+                labelText: 'macOS용 IME 비활성화 테스트',
+                helperText: '한영전환해도 영어로 되돌림 (Windows/macOS)',
+                border: OutlineInputBorder(),
+              ),
+              inputFormatters: [
+                FilteringTextInputFormatter.allow(
+                  RegExp(r'[a-zA-Z0-9!@#$%^&*()_+\-=\[\]{};:"\\|,.<>/?`~ ]'),
+                ),
+              ],
             ),
           ],
         ),
