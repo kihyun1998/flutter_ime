@@ -43,22 +43,22 @@ class _HomePageState extends State<HomePage> {
     NavigationRailDestination(
       icon: Icon(Icons.language_outlined),
       selectedIcon: Icon(Icons.language),
-      label: Text('키보드 상태'),
+      label: Text('Keyboard Status'),
     ),
     NavigationRailDestination(
       icon: Icon(Icons.block_outlined),
       selectedIcon: Icon(Icons.block),
-      label: Text('IME 비활성화'),
+      label: Text('Disable IME'),
     ),
     NavigationRailDestination(
       icon: Icon(Icons.swap_horiz_outlined),
       selectedIcon: Icon(Icons.swap_horiz),
-      label: Text('한영전환 감지'),
+      label: Text('Input Source'),
     ),
     NavigationRailDestination(
       icon: Icon(Icons.lock_outline),
       selectedIcon: Icon(Icons.lock),
-      label: Text('영어 강제'),
+      label: Text('Force English'),
     ),
   ];
 
@@ -97,7 +97,7 @@ class _HomePageState extends State<HomePage> {
 }
 
 // ============================================================
-// 1. Caps Lock 감지
+// 1. Caps Lock Detection
 // ============================================================
 class CapsLockPage extends StatefulWidget {
   const CapsLockPage({super.key});
@@ -155,12 +155,12 @@ class _CapsLockPageState extends State<CapsLockPage> {
         crossAxisAlignment: CrossAxisAlignment.start,
         children: [
           Text(
-            'Caps Lock 감지',
+            'Caps Lock Detection',
             style: Theme.of(context).textTheme.headlineMedium,
           ),
           const SizedBox(height: 8),
           Text(
-            '비밀번호 입력 시 Caps Lock 상태를 감지합니다.\n'
+            'Detects Caps Lock status when entering password.\n'
             'API: isCapsLockOn(), onCapsLockChanged()',
             style: Theme.of(context).textTheme.bodyMedium?.copyWith(
                   color: Colors.grey[600],
@@ -173,11 +173,11 @@ class _CapsLockPageState extends State<CapsLockPage> {
               controller: _passwordController,
               focusNode: _focusNode,
               decoration: InputDecoration(
-                labelText: '비밀번호',
+                labelText: 'Password',
                 border: const OutlineInputBorder(),
                 suffixIcon: _isCapsLockOn
                     ? const Tooltip(
-                        message: 'Caps Lock이 켜져 있습니다',
+                        message: 'Caps Lock is on',
                         child:
                             Icon(Icons.keyboard_capslock, color: Colors.orange),
                       )
@@ -194,7 +194,7 @@ class _CapsLockPageState extends State<CapsLockPage> {
                   Icon(Icons.warning_amber, color: Colors.orange, size: 16),
                   SizedBox(width: 4),
                   Text(
-                    'Caps Lock이 켜져 있습니다',
+                    'Caps Lock is on',
                     style: TextStyle(color: Colors.orange),
                   ),
                 ],
@@ -207,7 +207,7 @@ class _CapsLockPageState extends State<CapsLockPage> {
 }
 
 // ============================================================
-// 2. 키보드 상태 확인
+// 2. Keyboard Status Check
 // ============================================================
 class KeyboardStatusPage extends StatefulWidget {
   const KeyboardStatusPage({super.key});
@@ -217,12 +217,12 @@ class KeyboardStatusPage extends StatefulWidget {
 }
 
 class _KeyboardStatusPageState extends State<KeyboardStatusPage> {
-  String _status = '확인 전';
+  String _status = 'Not checked';
 
   Future<void> _checkStatus() async {
     final isEnglish = await isEnglishKeyboard();
     setState(() {
-      _status = isEnglish ? 'English' : 'Non-English (한글 등)';
+      _status = isEnglish ? 'English' : 'Non-English (Korean, etc.)';
     });
   }
 
@@ -234,12 +234,12 @@ class _KeyboardStatusPageState extends State<KeyboardStatusPage> {
         crossAxisAlignment: CrossAxisAlignment.start,
         children: [
           Text(
-            '키보드 상태 확인',
+            'Keyboard Status Check',
             style: Theme.of(context).textTheme.headlineMedium,
           ),
           const SizedBox(height: 8),
           Text(
-            '현재 입력 소스가 영어인지 확인합니다.\n'
+            'Checks if current input source is English.\n'
             'API: isEnglishKeyboard()',
             style: Theme.of(context).textTheme.bodyMedium?.copyWith(
                   color: Colors.grey[600],
@@ -278,7 +278,7 @@ class _KeyboardStatusPageState extends State<KeyboardStatusPage> {
           ElevatedButton.icon(
             onPressed: _checkStatus,
             icon: const Icon(Icons.refresh),
-            label: const Text('상태 확인'),
+            label: const Text('Check Status'),
           ),
         ],
       ),
@@ -287,7 +287,7 @@ class _KeyboardStatusPageState extends State<KeyboardStatusPage> {
 }
 
 // ============================================================
-// 3. IME 비활성화 (Windows only)
+// 3. Disable IME (Windows only)
 // ============================================================
 class ImeDisablePage extends StatefulWidget {
   const ImeDisablePage({super.key});
@@ -327,13 +327,13 @@ class _ImeDisablePageState extends State<ImeDisablePage> {
         crossAxisAlignment: CrossAxisAlignment.start,
         children: [
           Text(
-            'IME 비활성화',
+            'Disable IME',
             style: Theme.of(context).textTheme.headlineMedium,
           ),
           const SizedBox(height: 8),
           Text(
-            'Windows에서 IME를 완전히 비활성화합니다.\n'
-            '포커스 시 한글 입력이 불가능합니다.\n'
+            'Completely disables IME on Windows.\n'
+            'Korean input is not possible when focused.\n'
             'API: disableIME(), enableIME()',
             style: Theme.of(context).textTheme.bodyMedium?.copyWith(
                   color: Colors.grey[600],
@@ -358,8 +358,8 @@ class _ImeDisablePageState extends State<ImeDisablePage> {
               controller: _controller,
               focusNode: _focusNode,
               decoration: const InputDecoration(
-                labelText: 'IME 비활성화 테스트',
-                helperText: '포커스 시 한글 입력 불가',
+                labelText: 'Disable IME Test',
+                helperText: 'Korean input disabled when focused',
                 border: OutlineInputBorder(),
               ),
             ),
@@ -371,7 +371,7 @@ class _ImeDisablePageState extends State<ImeDisablePage> {
 }
 
 // ============================================================
-// 4. 한영전환 감지
+// 4. Input Source Change Detection
 // ============================================================
 class InputSourceChangePage extends StatefulWidget {
   const InputSourceChangePage({super.key});
@@ -383,7 +383,7 @@ class InputSourceChangePage extends StatefulWidget {
 class _InputSourceChangePageState extends State<InputSourceChangePage> {
   final _controller = TextEditingController();
   StreamSubscription<bool>? _subscription;
-  String _currentSource = '감지 중...';
+  String _currentSource = 'Detecting...';
   final List<String> _history = [];
 
   @override
@@ -415,12 +415,12 @@ class _InputSourceChangePageState extends State<InputSourceChangePage> {
         crossAxisAlignment: CrossAxisAlignment.start,
         children: [
           Text(
-            '한영전환 감지',
+            'Input Source Change Detection',
             style: Theme.of(context).textTheme.headlineMedium,
           ),
           const SizedBox(height: 8),
           Text(
-            '입력 소스(한/영) 변경을 실시간으로 감지합니다.\n'
+            'Detects input source (Korean/English) changes in real-time.\n'
             'API: onInputSourceChanged()',
             style: Theme.of(context).textTheme.bodyMedium?.copyWith(
                   color: Colors.grey[600],
@@ -442,7 +442,7 @@ class _InputSourceChangePageState extends State<InputSourceChangePage> {
                   ),
                   const SizedBox(width: 12),
                   Text(
-                    '현재: $_currentSource',
+                    'Current: $_currentSource',
                     style: Theme.of(context).textTheme.titleLarge,
                   ),
                 ],
@@ -455,14 +455,14 @@ class _InputSourceChangePageState extends State<InputSourceChangePage> {
             child: TextField(
               controller: _controller,
               decoration: const InputDecoration(
-                labelText: '여기서 한영전환 테스트',
+                labelText: 'Test input source switching here',
                 border: OutlineInputBorder(),
               ),
             ),
           ),
           const SizedBox(height: 24),
           Text(
-            '변경 기록',
+            'Change History',
             style: Theme.of(context).textTheme.titleMedium,
           ),
           const SizedBox(height: 8),
@@ -474,7 +474,7 @@ class _InputSourceChangePageState extends State<InputSourceChangePage> {
                 borderRadius: BorderRadius.circular(8),
               ),
               child: _history.isEmpty
-                  ? const Center(child: Text('한영전환을 해보세요'))
+                  ? const Center(child: Text('Try switching input source'))
                   : ListView.builder(
                       itemCount: _history.length,
                       itemBuilder: (context, index) {
@@ -496,7 +496,7 @@ class _InputSourceChangePageState extends State<InputSourceChangePage> {
 }
 
 // ============================================================
-// 5. 영어 강제 유지
+// 5. Force English Mode
 // ============================================================
 class ForceEnglishPage extends StatefulWidget {
   const ForceEnglishPage({super.key});
@@ -506,11 +506,11 @@ class ForceEnglishPage extends StatefulWidget {
 }
 
 class _ForceEnglishPageState extends State<ForceEnglishPage> {
-  // 현재 input source 확인용
+  // For checking current input source
   final _testController = TextEditingController();
   String? _currentInputSource;
 
-  // 영어 강제 TextField용
+  // For force English TextField
   final _controller = TextEditingController();
   final _focusNode = FocusNode();
   StreamSubscription<bool>? _subscription;
@@ -549,7 +549,7 @@ class _ForceEnglishPageState extends State<ForceEnglishPage> {
     } else {
       _subscription?.cancel();
       _subscription = null;
-      // 저장했던 키보드로 복원 (isEnglish 체크 없이 바로 set - 비용 절감)
+      // Restore to saved keyboard (direct set without isEnglish check - cost saving)
       if (_savedInputSource != null) {
         await setInputSource(_savedInputSource!);
       }
@@ -577,13 +577,13 @@ class _ForceEnglishPageState extends State<ForceEnglishPage> {
         crossAxisAlignment: CrossAxisAlignment.start,
         children: [
           Text(
-            '영어 강제 유지',
+            'Force English Mode',
             style: Theme.of(context).textTheme.headlineMedium,
           ),
           const SizedBox(height: 8),
           Text(
-            '포커스 중 한영전환을 해도 자동으로 영어로 되돌립니다.\n'
-            '포커스 해제 시 이전 키보드로 자동 복원됩니다.\n'
+            'Automatically switches back to English even when switching input sources while focused.\n'
+            'Automatically restores to previous keyboard when unfocused.\n'
             'API: getCurrentInputSource(), setInputSource(), setEnglishKeyboard()',
             style: Theme.of(context).textTheme.bodyMedium?.copyWith(
                   color: Colors.grey[600],
@@ -615,20 +615,20 @@ class _ForceEnglishPageState extends State<ForceEnglishPage> {
                       const Icon(Icons.info_outline, size: 20),
                       const SizedBox(width: 8),
                       Text(
-                        '현재 Input Source',
+                        'Current Input Source',
                         style: Theme.of(context).textTheme.titleSmall,
                       ),
                       const Spacer(),
                       IconButton(
                         icon: const Icon(Icons.refresh, size: 20),
                         onPressed: _refreshInputSource,
-                        tooltip: '새로고침',
+                        tooltip: 'Refresh',
                       ),
                     ],
                   ),
                   const SizedBox(height: 8),
                   SelectableText(
-                    _currentInputSource ?? '(알 수 없음)',
+                    _currentInputSource ?? '(Unknown)',
                     style: TextStyle(
                       fontFamily: 'monospace',
                       fontSize: 12,
@@ -638,7 +638,7 @@ class _ForceEnglishPageState extends State<ForceEnglishPage> {
                   if (_savedInputSource != null) ...[
                     const SizedBox(height: 8),
                     Text(
-                      '저장된 값: $_savedInputSource',
+                      'Saved value: $_savedInputSource',
                       style: TextStyle(
                         fontFamily: 'monospace',
                         fontSize: 11,
@@ -658,8 +658,8 @@ class _ForceEnglishPageState extends State<ForceEnglishPage> {
             child: TextField(
               controller: _testController,
               decoration: const InputDecoration(
-                labelText: '일반 TextField (테스트용)',
-                helperText: '한글 입력 가능',
+                labelText: 'Normal TextField (for testing)',
+                helperText: 'Korean input allowed',
                 border: OutlineInputBorder(),
               ),
               onTap: _refreshInputSource,
@@ -682,7 +682,7 @@ class _ForceEnglishPageState extends State<ForceEnglishPage> {
                   Icon(Icons.check, color: Colors.green, size: 16),
                   SizedBox(width: 4),
                   Text(
-                    '영어 강제 활성화 중',
+                    'Force English active',
                     style: TextStyle(color: Colors.green),
                   ),
                 ],
@@ -694,8 +694,8 @@ class _ForceEnglishPageState extends State<ForceEnglishPage> {
               controller: _controller,
               focusNode: _focusNode,
               decoration: const InputDecoration(
-                labelText: '영어만 입력 가능',
-                helperText: '포커스 해제 시 이전 키보드로 복원',
+                labelText: 'English only',
+                helperText: 'Restores to previous keyboard when unfocused',
                 border: OutlineInputBorder(),
               ),
               inputFormatters: [

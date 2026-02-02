@@ -1,3 +1,7 @@
+## 2.1.2
+
+* **chore**: Translate example app UI from Korean to English
+
 ## 2.1.1
 
 * **feat**: Add `getCurrentInputSource()` to get current keyboard input source ID (Windows, macOS)
