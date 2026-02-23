@@ -1,6 +1,6 @@
 name: flutter_ime
 description: "A Flutter plugin for controlling IME (Input Method Editor) state. Switch to English keyboard, detect input source changes, and monitor Caps Lock state on Windows and macOS."
-version: 2.1.2
+version: 2.1.3
 homepage: "https://github.com/kihyun1998/flutter_ime"
 repository: https://github.com/kihyun1998/flutter_ime
 topics:

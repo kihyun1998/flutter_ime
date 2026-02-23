@@ -223,7 +223,9 @@ void FlutterImePlugin::HandleMethodCall(
       result->Error("IME_ERROR","Failed to enable IME");
     }
   } else if(method_call.method_name().compare("isCapsLockOn")==0){
-    result->Success(flutter::EncodableValue(IsCapsLockOn()));
+    bool is_on = IsCapsLockOn();
+    last_caps_lock_state_ = is_on;
+    result->Success(flutter::EncodableValue(is_on));
   } else if(method_call.method_name().compare("getCurrentInputSource")==0){
     std::string source = GetCurrentInputSource();
     if(!source.empty()){

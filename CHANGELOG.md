@@ -1,3 +1,7 @@
+## 2.1.3
+
+* **fix**: Sync `last_caps_lock_state` when `isCapsLockOn()` is called via method channel (Windows, macOS)
+
 ## 2.1.2
 
 * **chore**: Translate example app UI from Korean to English

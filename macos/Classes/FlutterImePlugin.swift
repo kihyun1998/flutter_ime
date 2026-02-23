@@ -75,7 +75,9 @@ public class FlutterImePlugin: NSObject, FlutterPlugin, FlutterStreamHandler {
       // Not supported on macOS
       result(FlutterMethodNotImplemented)
     case "isCapsLockOn":
-      result(isCapsLockOn())
+      let capsLockState = isCapsLockOn()
+      lastCapsLockState = capsLockState
+      result(capsLockState)
     default:
       result(FlutterMethodNotImplemented)
     }

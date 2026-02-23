@@ -20,7 +20,7 @@ Add this to your package's `pubspec.yaml` file:
 
 ```yaml
 dependencies:
-  flutter_ime: ^2.1.2
+  flutter_ime: ^2.1.3
 ```
 
 ## Usage
