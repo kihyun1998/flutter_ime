@@ -75,10 +75,8 @@ class InputSourceManager: NSObject, FlutterStreamHandler {
 
     let currentID = Unmanaged<CFString>.fromOpaque(sourceID).takeUnretainedValue() as String
 
-    // Check if current input source is English.
-    // Common English keyboard IDs: ABC, US, etc.
-    return currentID.contains("com.apple.keylayout.ABC") ||
-           currentID.contains("com.apple.keylayout.US")
+    // Check if current input source is English (ABC/US layouts).
+    return isEnglishInputSourceId(currentID)
   }
 
   /// Get current input source ID.

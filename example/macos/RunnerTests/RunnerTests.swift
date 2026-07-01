@@ -25,4 +25,21 @@ class RunnerTests: XCTestCase {
     waitForExpectations(timeout: 1)
   }
 
+  // The ABC and US layouts are English; other input sources (e.g. Korean) are
+  // not. Expected values come from the domain, not the implementation.
+  func testEnglishInputSourceIdClassification() {
+    XCTAssertTrue(isEnglishInputSourceId("com.apple.keylayout.ABC"))
+    XCTAssertTrue(isEnglishInputSourceId("com.apple.keylayout.US"))
+    XCTAssertFalse(
+      isEnglishInputSourceId("com.apple.inputmethod.Korean.2SetKorean"))
+  }
+
+  // A Caps Lock change is emitted only when the state flips.
+  func testCapsLockDidChangeOnlyOnFlip() {
+    XCTAssertTrue(capsLockDidChange(current: true, last: false))
+    XCTAssertTrue(capsLockDidChange(current: false, last: true))
+    XCTAssertFalse(capsLockDidChange(current: true, last: true))
+    XCTAssertFalse(capsLockDidChange(current: false, last: false))
+  }
+
 }

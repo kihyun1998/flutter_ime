@@ -80,9 +80,19 @@ jobs:
           cache: true
 
       # Building the example compiles the Swift managers (InputSourceManager /
-      # CapsLockManager) — the only place the macOS split and the monitor/
-      # observer lifecycle fixes are verified, since they cannot be built on the
-      # Windows dev host.
+      # CapsLockManager). Must run before xcodebuild so the generated
+      # Flutter/ephemeral files exist.
       - name: Build example (macOS)
         working-directory: example
         run: flutter build macos --debug
+
+      # Run the XCTest target (RunnerTests), which unit-tests the pure Swift
+      # classification helpers via `@testable import flutter_ime`.
+      - name: Run XCTest
+        working-directory: example
+        run: |
+          xcodebuild test \
+            -workspace macos/Runner.xcworkspace \
+            -scheme Runner \
+            -destination 'platform=macOS' \
+            CODE_SIGNING_ALLOWED=NO

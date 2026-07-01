@@ -77,7 +77,7 @@ class CapsLockManager: NSObject, FlutterStreamHandler {
 
   private func handleFlagsChanged(_ event: NSEvent) {
     let currentCapsLock = event.modifierFlags.contains(.capsLock)
-    if currentCapsLock != lastCapsLockState {
+    if capsLockDidChange(current: currentCapsLock, last: lastCapsLockState) {
       lastCapsLockState = currentCapsLock
       capsLockEventSink?(currentCapsLock)
     }
