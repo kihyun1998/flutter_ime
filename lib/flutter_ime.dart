@@ -1,6 +1,5 @@
-import 'dart:io';
-
 import 'flutter_ime_platform_interface.dart';
+import 'src/platform_support.dart';
 
 /// Changes the IME (Input Method Editor) to English mode.
 ///
@@ -27,7 +26,7 @@ import 'flutter_ime_platform_interface.dart';
 /// - [isEnglishKeyboard] to check current keyboard state
 /// - [onInputSourceChanged] to monitor keyboard changes
 Future<void> setEnglishKeyboard() async {
-  if (!Platform.isWindows && !Platform.isMacOS) return;
+  if (!platformSupport.isSupported) return;
 
   await FlutterImePlatform.instance.setEnglishKeyboard();
 }
@@ -58,7 +57,7 @@ Future<void> setEnglishKeyboard() async {
 /// - [setEnglishKeyboard] to switch to English mode
 /// - [onInputSourceChanged] to monitor keyboard changes
 Future<bool> isEnglishKeyboard() async {
-  if (!Platform.isWindows && !Platform.isMacOS) return false;
+  if (!platformSupport.isSupported) return false;
 
   return FlutterImePlatform.instance.isEnglishKeyboard();
 }
@@ -95,7 +94,7 @@ Future<bool> isEnglishKeyboard() async {
 /// - [setInputSource] to restore a saved input source
 /// - [setEnglishKeyboard] to switch to English mode
 Future<String?> getCurrentInputSource() async {
-  if (!Platform.isWindows && !Platform.isMacOS) return null;
+  if (!platformSupport.isSupported) return null;
 
   return FlutterImePlatform.instance.getCurrentInputSource();
 }
@@ -135,7 +134,7 @@ Future<String?> getCurrentInputSource() async {
 /// - [getCurrentInputSource] to get the current input source ID
 /// - [setEnglishKeyboard] to switch to English mode
 Future<void> setInputSource(String sourceId) async {
-  if (!Platform.isWindows && !Platform.isMacOS) return;
+  if (!platformSupport.isSupported) return;
 
   await FlutterImePlatform.instance.setInputSource(sourceId);
 }
@@ -170,7 +169,7 @@ Future<void> setInputSource(String sourceId) async {
 /// - [enableIME] to restore IME functionality
 /// - [setEnglishKeyboard] for a less restrictive approach
 Future<void> disableIME() async {
-  if (!Platform.isWindows) return;
+  if (!platformSupport.isWindowsOnly) return;
 
   await FlutterImePlatform.instance.disableIME();
 }
@@ -197,7 +196,7 @@ Future<void> disableIME() async {
 /// See also:
 /// - [disableIME] to disable IME
 Future<void> enableIME() async {
-  if (!Platform.isWindows) return;
+  if (!platformSupport.isWindowsOnly) return;
 
   await FlutterImePlatform.instance.enableIME();
 }
@@ -239,7 +238,7 @@ Future<void> enableIME() async {
 /// - [setEnglishKeyboard] to switch to English mode
 /// - [isEnglishKeyboard] to check current state
 Stream<bool> onInputSourceChanged() {
-  if (!Platform.isWindows && !Platform.isMacOS) {
+  if (!platformSupport.isSupported) {
     return const Stream.empty();
   }
 
@@ -271,7 +270,7 @@ Stream<bool> onInputSourceChanged() {
 /// See also:
 /// - [onCapsLockChanged] to monitor Caps Lock state changes
 Future<bool> isCapsLockOn() async {
-  if (!Platform.isWindows && !Platform.isMacOS) return false;
+  if (!platformSupport.isSupported) return false;
 
   return FlutterImePlatform.instance.isCapsLockOn();
 }
@@ -319,7 +318,7 @@ Future<bool> isCapsLockOn() async {
 /// See also:
 /// - [isCapsLockOn] to check current state
 Stream<bool> onCapsLockChanged() {
-  if (!Platform.isWindows && !Platform.isMacOS) {
+  if (!platformSupport.isSupported) {
     return const Stream.empty();
   }
 
