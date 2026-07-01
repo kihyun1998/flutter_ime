@@ -5,12 +5,36 @@
 #include <windows.h>
 #include <imm.h>
 
+#include <exception>
 #include <sstream>
+#include <string>
 
 // Link IMM32 library (also linked via CMakeLists.txt).
 #pragma comment(lib, "imm32.lib")
 
 namespace flutter_ime {
+
+namespace {
+
+// Parses [text] as a DWORD without throwing. Returns false (leaving [out]
+// untouched) when the string is empty, has trailing non-numeric characters, or
+// is out of range. Guards against std::stoul throwing across the method-channel
+// boundary and crashing the host app.
+bool TryParseDword(const std::string& text, DWORD& out) {
+  if (text.empty()) return false;
+  try {
+    size_t consumed = 0;
+    unsigned long value = std::stoul(text, &consumed);
+    if (consumed != text.size()) return false;  // trailing non-numeric
+    out = static_cast<DWORD>(value);
+    return true;
+  } catch (const std::exception&) {
+    // std::invalid_argument (not a number) or std::out_of_range.
+    return false;
+  }
+}
+
+}  // namespace
 
 InputSourceManager::InputSourceManager(std::function<HWND()> hwnd_provider)
     : hwnd_provider_(std::move(hwnd_provider)) {}
@@ -169,8 +193,12 @@ bool InputSourceManager::SetInputSource(const std::string& source_id) {
     klid = source_id.substr(0, firstColon);
     size_t secondColon = source_id.find(':', firstColon + 1);
     if (secondColon != std::string::npos) {
-      conversion = std::stoul(source_id.substr(firstColon + 1, secondColon - firstColon - 1));
-      sentence = std::stoul(source_id.substr(secondColon + 1));
+      // Reject malformed numeric segments instead of letting std::stoul throw
+      // (which would escape to Dart and crash the app).
+      if (!TryParseDword(source_id.substr(firstColon + 1, secondColon - firstColon - 1), conversion) ||
+          !TryParseDword(source_id.substr(secondColon + 1), sentence)) {
+        return false;
+      }
       hasConversion = true;
     }
   }
