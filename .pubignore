@@ -1,0 +1,13 @@
+# A .pubignore replaces .gitignore for publishing, so it must also re-exclude
+# the build artifacts and tool caches that .gitignore normally keeps out.
+
+# Build artifacts / tooling caches (would bloat the published archive).
+build/
+.dart_tool/
+.flutter-plugins
+.flutter-plugins-dependencies
+
+# Repo-internal docs and agent tooling — not needed by package consumers.
+docs/
+CLAUDE.md
+.codeignore
