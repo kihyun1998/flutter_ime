@@ -1,0 +1,76 @@
+name: CI
+
+on:
+  push:
+    branches: [main]
+  pull_request:
+
+# Pinned so CI does not drift with the runner's default Flutter.
+env:
+  FLUTTER_VERSION: "3.41.9"
+
+jobs:
+  dart:
+    name: Dart
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v5
+
+      - uses: subosito/flutter-action@v2
+        with:
+          flutter-version: ${{ env.FLUTTER_VERSION }}
+          channel: stable
+          cache: true
+
+      - run: flutter --version
+
+      - name: Install dependencies
+        run: flutter pub get
+
+      - name: Format check
+        run: dart format --output=none --set-exit-if-changed .
+
+      - name: Analyze
+        run: flutter analyze
+
+      - name: Test
+        run: flutter test
+
+  windows:
+    name: Windows
+    runs-on: windows-latest
+    steps:
+      - uses: actions/checkout@v5
+
+      - uses: subosito/flutter-action@v2
+        with:
+          flutter-version: ${{ env.FLUTTER_VERSION }}
+          channel: stable
+          cache: true
+
+      # Building the example compiles and links the C++ plugin (managers,
+      # WndProc subclass hook, IMM32/comctl32 usage). There is no gtest harness
+      # in windows/test yet, so the build is the native verification.
+      - name: Build example (Windows)
+        working-directory: example
+        run: flutter build windows --debug
+
+  macos:
+    name: macOS
+    runs-on: macos-latest
+    steps:
+      - uses: actions/checkout@v5
+
+      - uses: subosito/flutter-action@v2
+        with:
+          flutter-version: ${{ env.FLUTTER_VERSION }}
+          channel: stable
+          cache: true
+
+      # Building the example compiles the Swift managers (InputSourceManager /
+      # CapsLockManager) — the only place the macOS split and the monitor/
+      # observer lifecycle fixes are verified, since they cannot be built on the
+      # Windows dev host.
+      - name: Build example (macOS)
+        working-directory: example
+        run: flutter build macos --debug
