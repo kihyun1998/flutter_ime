@@ -24,6 +24,8 @@ list(APPEND PLUGIN_SOURCES
   "input_source_manager.h"
   "input_source_token.cpp"
   "input_source_token.h"
+  "ime_message_filter.cpp"
+  "ime_message_filter.h"
   "caps_lock_manager.cpp"
   "caps_lock_manager.h"
   "ime_channel_constants.h"

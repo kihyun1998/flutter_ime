@@ -30,7 +30,9 @@ FetchContent_MakeAvailable(googletest)
 set(PLUGIN_DIR "${CMAKE_CURRENT_SOURCE_DIR}/..")
 add_executable(flutter_ime_windows_test
   "${PLUGIN_DIR}/input_source_token.cpp"
+  "${PLUGIN_DIR}/ime_message_filter.cpp"
   "input_source_token_test.cpp"
+  "ime_message_filter_test.cpp"
 )
 target_include_directories(flutter_ime_windows_test PRIVATE "${PLUGIN_DIR}")
 target_link_libraries(flutter_ime_windows_test PRIVATE GTest::gtest_main)

@@ -5,9 +5,9 @@
 #include <windows.h>
 #include <imm.h>
 
-#include <sstream>
 #include <string>
 
+#include "ime_message_filter.h"
 #include "input_source_token.h"
 
 // Link IMM32 library (also linked via CMakeLists.txt).
@@ -36,27 +36,7 @@ void InputSourceManager::SendInputSourceChangedEvent(bool is_english) {
 }
 
 bool InputSourceManager::ShouldBlockMessage(UINT message, WPARAM wparam) const {
-  if (!ime_disabled_) return false;
-
-  switch (message) {
-    case WM_IME_STARTCOMPOSITION:
-    case WM_IME_COMPOSITION:
-    case WM_IME_ENDCOMPOSITION:
-    case WM_IME_NOTIFY:
-    case WM_IME_SETCONTEXT:
-    case WM_IME_CHAR:
-      // Block IME messages.
-      return true;
-    case WM_CHAR:
-      // Block Korean character range (Hangul syllables: 0xAC00-0xD7A3,
-      // Jamo: 0x3131-0x3163).
-      if ((wparam >= 0xAC00 && wparam <= 0xD7A3) ||
-          (wparam >= 0x3131 && wparam <= 0x3163)) {
-        return true;
-      }
-      break;
-  }
-  return false;
+  return ime_disabled_ && ShouldBlockImeMessage(message, wparam);
 }
 
 // Set IME to English mode.
@@ -146,9 +126,7 @@ std::string InputSourceManager::GetCurrentInputSource() {
   ImmReleaseContext(hwnd, imc);
 
   // Format: KLID:conversion:sentence
-  std::ostringstream oss;
-  oss << klid << ":" << conversion << ":" << sentence;
-  return oss.str();
+  return FormatInputSourceToken(std::string(klid), conversion, sentence);
 }
 
 // Set input source from a saved token (KLID:conversion:sentence format).

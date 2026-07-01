@@ -69,5 +69,22 @@ TEST(ParseInputSourceToken, OutOfRangeNumberIsRejectedNotThrown) {
   EXPECT_FALSE(ParseInputSourceToken("00000412:99999999999999:0", token));
 }
 
+// Formatting is the inverse of parsing: klid + conversion + sentence joined by
+// colons. Expected string is a hand-written literal, not recomputed.
+TEST(FormatInputSourceToken, JoinsPartsWithColons) {
+  EXPECT_EQ(FormatInputSourceToken("00000412", 1, 0), "00000412:1:0");
+}
+
+// Formatting then parsing recovers the original parts (inverse relationship).
+TEST(FormatInputSourceToken, RoundTripsThroughParser) {
+  const std::string formatted = FormatInputSourceToken("00000409", 2, 1);
+  InputSourceToken token;
+  ASSERT_TRUE(ParseInputSourceToken(formatted, token));
+  EXPECT_EQ(token.klid, "00000409");
+  EXPECT_TRUE(token.has_conversion);
+  EXPECT_EQ(token.conversion, 2u);
+  EXPECT_EQ(token.sentence, 1u);
+}
+
 }  // namespace
 }  // namespace flutter_ime

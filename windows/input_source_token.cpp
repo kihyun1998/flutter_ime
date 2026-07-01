@@ -1,6 +1,7 @@
 #include "input_source_token.h"
 
 #include <exception>
+#include <sstream>
 
 namespace flutter_ime {
 
@@ -57,6 +58,13 @@ bool ParseInputSourceToken(const std::string& source_id, InputSourceToken& out) 
   out.sentence = sentence;
   out.has_conversion = true;
   return true;
+}
+
+std::string FormatInputSourceToken(const std::string& klid, uint32_t conversion,
+                                   uint32_t sentence) {
+  std::ostringstream oss;
+  oss << klid << ":" << conversion << ":" << sentence;
+  return oss.str();
 }
 
 }  // namespace flutter_ime

@@ -26,6 +26,11 @@ struct InputSourceToken {
 // and crashing the host app.
 bool ParseInputSourceToken(const std::string& source_id, InputSourceToken& out);
 
+// Formats the parts of an input-source token back into
+// "KLID:conversion:sentence" - the inverse of ParseInputSourceToken.
+std::string FormatInputSourceToken(const std::string& klid, uint32_t conversion,
+                                   uint32_t sentence);
+
 }  // namespace flutter_ime
 
 #endif  // FLUTTER_PLUGIN_INPUT_SOURCE_TOKEN_H_
