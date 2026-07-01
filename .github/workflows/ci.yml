@@ -48,9 +48,16 @@ jobs:
           channel: stable
           cache: true
 
-      # Building the example compiles and links the C++ plugin (managers,
-      # WndProc subclass hook, IMM32/comctl32 usage). There is no gtest harness
-      # in windows/test yet, so the build is the native verification.
+      # Unit-test the plugin's pure logic (input-source token parsing, issue #3)
+      # via the standalone GoogleTest harness. No Flutter engine needed.
+      - name: Build and run C++ unit tests
+        run: |
+          cmake -S windows/test -B build/win-test -G "Visual Studio 17 2022" -A x64
+          cmake --build build/win-test --config Debug
+          ctest --test-dir build/win-test -C Debug --output-on-failure
+
+      # Building the example compiles and links the full C++ plugin (managers,
+      # WndProc subclass hook, IMM32/comctl32 usage).
       - name: Build example (Windows)
         working-directory: example
         run: flutter build windows --debug

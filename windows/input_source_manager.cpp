@@ -5,36 +5,15 @@
 #include <windows.h>
 #include <imm.h>
 
-#include <exception>
 #include <sstream>
 #include <string>
+
+#include "input_source_token.h"
 
 // Link IMM32 library (also linked via CMakeLists.txt).
 #pragma comment(lib, "imm32.lib")
 
 namespace flutter_ime {
-
-namespace {
-
-// Parses [text] as a DWORD without throwing. Returns false (leaving [out]
-// untouched) when the string is empty, has trailing non-numeric characters, or
-// is out of range. Guards against std::stoul throwing across the method-channel
-// boundary and crashing the host app.
-bool TryParseDword(const std::string& text, DWORD& out) {
-  if (text.empty()) return false;
-  try {
-    size_t consumed = 0;
-    unsigned long value = std::stoul(text, &consumed);
-    if (consumed != text.size()) return false;  // trailing non-numeric
-    out = static_cast<DWORD>(value);
-    return true;
-  } catch (const std::exception&) {
-    // std::invalid_argument (not a number) or std::out_of_range.
-    return false;
-  }
-}
-
-}  // namespace
 
 InputSourceManager::InputSourceManager(std::function<HWND()> hwnd_provider)
     : hwnd_provider_(std::move(hwnd_provider)) {}
@@ -174,46 +153,24 @@ std::string InputSourceManager::GetCurrentInputSource() {
 
 // Set input source from a saved token (KLID:conversion:sentence format).
 bool InputSourceManager::SetInputSource(const std::string& source_id) {
-  if (source_id.empty()) return false;
+  // Reject empty or malformed tokens up front; this never throws.
+  InputSourceToken token;
+  if (!ParseInputSourceToken(source_id, token)) return false;
 
   HWND hwnd = hwnd_provider_();
   if (!hwnd) return false;
 
-  // Parse source_id (format: KLID or KLID:conversion:sentence).
-  std::string klid;
-  DWORD conversion = 0;
-  DWORD sentence = 0;
-  bool hasConversion = false;
-
-  size_t firstColon = source_id.find(':');
-  if (firstColon == std::string::npos) {
-    // KLID only.
-    klid = source_id;
-  } else {
-    klid = source_id.substr(0, firstColon);
-    size_t secondColon = source_id.find(':', firstColon + 1);
-    if (secondColon != std::string::npos) {
-      // Reject malformed numeric segments instead of letting std::stoul throw
-      // (which would escape to Dart and crash the app).
-      if (!TryParseDword(source_id.substr(firstColon + 1, secondColon - firstColon - 1), conversion) ||
-          !TryParseDword(source_id.substr(secondColon + 1), sentence)) {
-        return false;
-      }
-      hasConversion = true;
-    }
-  }
-
   // Load and activate keyboard layout.
-  HKL hkl = LoadKeyboardLayoutA(klid.c_str(), KLF_ACTIVATE);
+  HKL hkl = LoadKeyboardLayoutA(token.klid.c_str(), KLF_ACTIVATE);
   if (!hkl) {
     return false;
   }
 
-  // Set IME conversion status if available.
-  if (hasConversion) {
+  // Restore IME conversion status if the token carried it.
+  if (token.has_conversion) {
     HIMC imc = ImmGetContext(hwnd);
     if (imc) {
-      ImmSetConversionStatus(imc, conversion, sentence);
+      ImmSetConversionStatus(imc, token.conversion, token.sentence);
       ImmReleaseContext(hwnd, imc);
     }
   }
