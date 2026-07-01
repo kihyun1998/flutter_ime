@@ -14,6 +14,7 @@
 #include "caps_lock_manager.h"
 #include "ime_channel_constants.h"
 #include "input_source_manager.h"
+#include "method_dispatch.h"
 
 // Link the common-controls library for SetWindowSubclass/DefSubclassProc
 // (also linked via CMakeLists.txt).
@@ -162,64 +163,8 @@ void FlutterImePlugin::RemoveWndProcHook() {
 void FlutterImePlugin::HandleMethodCall(
     const flutter::MethodCall<flutter::EncodableValue> &method_call,
     std::unique_ptr<flutter::MethodResult<flutter::EncodableValue>> result) {
-  const std::string& method = method_call.method_name();
-
-  if (method == methods::kSetEnglishKeyboard) {
-    if (input_source_manager_->SetEnglishKeyboard()) {
-      result->Success();
-    } else {
-      result->Error("IME_ERROR", "Failed to set English keyboard");
-    }
-  } else if (method == methods::kIsEnglishKeyboard) {
-    result->Success(
-        flutter::EncodableValue(input_source_manager_->IsEnglishKeyboard()));
-  } else if (method == methods::kDisableIme) {
-    if (input_source_manager_->DisableIME()) {
-      result->Success();
-    } else {
-      result->Error("IME_ERROR", "Failed to disable IME");
-    }
-  } else if (method == methods::kEnableIme) {
-    if (input_source_manager_->EnableIME()) {
-      result->Success();
-    } else {
-      result->Error("IME_ERROR", "Failed to enable IME");
-    }
-  } else if (method == methods::kIsCapsLockOn) {
-    result->Success(
-        flutter::EncodableValue(caps_lock_manager_->QueryAndSyncState()));
-  } else if (method == methods::kGetCurrentInputSource) {
-    std::string source = input_source_manager_->GetCurrentInputSource();
-    if (!source.empty()) {
-      result->Success(flutter::EncodableValue(source));
-    } else {
-      result->Success(flutter::EncodableValue());
-    }
-  } else if (method == methods::kSetInputSource) {
-    const auto* args =
-        std::get_if<flutter::EncodableMap>(method_call.arguments());
-    if (args) {
-      auto it = args->find(flutter::EncodableValue(arguments::kSourceId));
-      if (it != args->end()) {
-        const auto* sourceId = std::get_if<std::string>(&it->second);
-        if (sourceId) {
-          if (input_source_manager_->SetInputSource(*sourceId)) {
-            result->Success();
-          } else {
-            result->Error("IME_ERROR", "Failed to set input source");
-          }
-        } else {
-          result->Error("INVALID_ARGUMENT", "sourceId must be a string");
-        }
-      } else {
-        result->Error("INVALID_ARGUMENT", "sourceId is required");
-      }
-    } else {
-      result->Error("INVALID_ARGUMENT", "Arguments must be a map");
-    }
-  } else {
-    result->NotImplemented();
-  }
+  HandleImeMethodCall(*input_source_manager_, *caps_lock_manager_, method_call,
+                      std::move(result));
 }
 
 }  // namespace flutter_ime

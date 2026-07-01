@@ -48,8 +48,13 @@ jobs:
           channel: stable
           cache: true
 
-      # Unit-test the plugin's pure logic (input-source token parsing, issue #3)
-      # via the standalone GoogleTest harness. No Flutter engine needed.
+      # The gtest harness compiles the managers + method dispatch, which link the
+      # Flutter C++ client wrapper from the cached Windows engine artifacts.
+      - name: Precache Windows engine artifacts
+        run: flutter precache --windows
+
+      # Unit-test the plugin's pure logic and method-call dispatch via the
+      # standalone GoogleTest harness.
       - name: Build and run C++ unit tests
         run: |
           cmake -S windows/test -B build/win-test -G "Visual Studio 17 2022" -A x64
