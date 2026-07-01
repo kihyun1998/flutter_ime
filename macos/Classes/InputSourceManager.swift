@@ -20,6 +20,11 @@ class InputSourceManager: NSObject, FlutterStreamHandler {
     )
   }
 
+  deinit {
+    // Balance the observer registered in init so it is not left dangling.
+    DistributedNotificationCenter.default().removeObserver(self)
+  }
+
   @objc private func inputSourceChanged() {
     eventSink?(isEnglishKeyboard())
   }

@@ -5,13 +5,18 @@ import FlutterMacOS
 /// Lock change events. Serves as the stream handler for the caps-lock-changed
 /// event channel.
 ///
-/// NOTE: The event-monitor lifecycle here intentionally mirrors the previous
-/// implementation (including its leak of the local monitor). Fixing that leak
-/// is tracked separately and must not be conflated with this structural split.
+/// Both the global and local flags-changed monitors are retained and removed
+/// together; starting is idempotent, and monitors are also torn down on deinit,
+/// so no monitor is leaked across onListen/onCancel cycles.
 class CapsLockManager: NSObject, FlutterStreamHandler {
   private var capsLockEventSink: FlutterEventSink?
   private var lastCapsLockState: Bool = false
-  private var flagsChangedMonitor: Any?
+  private var globalFlagsMonitor: Any?
+  private var localFlagsMonitor: Any?
+
+  deinit {
+    stopMonitoring()
+  }
 
   /// Check if Caps Lock is on.
   func isCapsLockOn() -> Bool {
@@ -44,21 +49,29 @@ class CapsLockManager: NSObject, FlutterStreamHandler {
   // MARK: - Monitoring
 
   private func startMonitoring() {
+    // Remove any existing monitors first so a repeated start (e.g. onListen
+    // called again without an onCancel) does not orphan the previous ones.
+    stopMonitoring()
+
     lastCapsLockState = isCapsLockOn()
-    flagsChangedMonitor = NSEvent.addGlobalMonitorForEvents(matching: .flagsChanged) { [weak self] event in
+    globalFlagsMonitor = NSEvent.addGlobalMonitorForEvents(matching: .flagsChanged) { [weak self] event in
       self?.handleFlagsChanged(event)
     }
     // Also monitor local events (when app has focus).
-    NSEvent.addLocalMonitorForEvents(matching: .flagsChanged) { [weak self] event in
+    localFlagsMonitor = NSEvent.addLocalMonitorForEvents(matching: .flagsChanged) { [weak self] event in
       self?.handleFlagsChanged(event)
       return event
     }
   }
 
   private func stopMonitoring() {
-    if let monitor = flagsChangedMonitor {
+    if let monitor = globalFlagsMonitor {
       NSEvent.removeMonitor(monitor)
-      flagsChangedMonitor = nil
+      globalFlagsMonitor = nil
+    }
+    if let monitor = localFlagsMonitor {
+      NSEvent.removeMonitor(monitor)
+      localFlagsMonitor = nil
     }
   }
 
