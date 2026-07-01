@@ -37,18 +37,21 @@ class FlutterImePlugin : public flutter::Plugin {
   // Get Flutter view HWND.
   HWND GetFlutterViewHwnd();
 
-  // WndProc hook functions.
-  static LRESULT CALLBACK WndProcHook(HWND hwnd, UINT message, WPARAM wparam, LPARAM lparam);
+  // Window-subclass hook functions. The subclass procedure is a static callback
+  // (a code pointer, not mutable state); the owning instance is carried per
+  // window as the subclass ref-data, so nothing is shared across instances.
+  static LRESULT CALLBACK SubclassProc(HWND hwnd, UINT message, WPARAM wparam,
+                                       LPARAM lparam, UINT_PTR id_subclass,
+                                       DWORD_PTR ref_data);
   void SetupWndProcHook();
   void RemoveWndProcHook();
 
   flutter::PluginRegistrarWindows *registrar_ = nullptr;
   HWND flutter_hwnd_ = nullptr;
 
-  // WndProc hook members. Still static (single-window assumption); removing the
-  // static global state is tracked as a follow-up.
-  static FlutterImePlugin* instance_;
-  static WNDPROC original_wndproc_;
+  // Identifies this plugin's subclass on a window (per-window, per-instance).
+  static constexpr UINT_PTR kSubclassId = 1;
+  bool hooked_ = false;
 
   // EventChannels (stream handlers forward sinks to the managers).
   std::unique_ptr<flutter::EventChannel<flutter::EncodableValue>> event_channel_;

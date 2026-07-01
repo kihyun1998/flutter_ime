@@ -2,6 +2,7 @@
 
 // This must be included before many other Windows headers.
 #include <windows.h>
+#include <commctrl.h>
 
 #include <flutter/method_channel.h>
 #include <flutter/plugin_registrar_windows.h>
@@ -14,11 +15,11 @@
 #include "ime_channel_constants.h"
 #include "input_source_manager.h"
 
-namespace flutter_ime {
+// Link the common-controls library for SetWindowSubclass/DefSubclassProc
+// (also linked via CMakeLists.txt).
+#pragma comment(lib, "comctl32.lib")
 
-// Static member initialization
-FlutterImePlugin* FlutterImePlugin::instance_ = nullptr;
-WNDPROC FlutterImePlugin::original_wndproc_ = nullptr;
+namespace flutter_ime {
 
 // static
 void FlutterImePlugin::RegisterWithRegistrar(
@@ -87,7 +88,6 @@ void FlutterImePlugin::RegisterWithRegistrar(
 
 FlutterImePlugin::FlutterImePlugin(flutter::PluginRegistrarWindows *registrar)
     : registrar_(registrar) {
-  instance_ = this;
   flutter_hwnd_ = GetFlutterViewHwnd();
   input_source_manager_ = std::make_unique<InputSourceManager>(
       [this]() { return GetFlutterViewHwnd(); });
@@ -98,7 +98,6 @@ FlutterImePlugin::FlutterImePlugin(flutter::PluginRegistrarWindows *registrar)
 
 FlutterImePlugin::~FlutterImePlugin() {
   RemoveWndProcHook();
-  instance_ = nullptr;
 }
 
 HWND FlutterImePlugin::GetFlutterViewHwnd() {
@@ -108,13 +107,17 @@ HWND FlutterImePlugin::GetFlutterViewHwnd() {
   return GetForegroundWindow();
 }
 
-// WndProc hook - forwards input-source / caps-lock messages to the managers and
-// blocks IME messages while the IME is disabled.
-LRESULT CALLBACK FlutterImePlugin::WndProcHook(HWND hwnd, UINT message,
-                                               WPARAM wparam, LPARAM lparam) {
-  if (instance_) {
-    InputSourceManager* input = instance_->input_source_manager_.get();
-    CapsLockManager* caps = instance_->caps_lock_manager_.get();
+// Subclass procedure - forwards input-source / caps-lock messages to the owning
+// instance's managers and blocks IME messages while the IME is disabled. The
+// instance is recovered from the per-window subclass ref-data.
+LRESULT CALLBACK FlutterImePlugin::SubclassProc(HWND hwnd, UINT message,
+                                                WPARAM wparam, LPARAM lparam,
+                                                UINT_PTR /*id_subclass*/,
+                                                DWORD_PTR ref_data) {
+  auto* self = reinterpret_cast<FlutterImePlugin*>(ref_data);
+  if (self) {
+    InputSourceManager* input = self->input_source_manager_.get();
+    CapsLockManager* caps = self->caps_lock_manager_.get();
 
     // Detect input source changes.
     // WM_INPUTLANGCHANGE: keyboard layout change (e.g., English -> Korean).
@@ -136,25 +139,23 @@ LRESULT CALLBACK FlutterImePlugin::WndProcHook(HWND hwnd, UINT message,
     }
   }
 
-  if (original_wndproc_) {
-    return CallWindowProc(original_wndproc_, hwnd, message, wparam, lparam);
-  }
-  return DefWindowProc(hwnd, message, wparam, lparam);
+  // Chain to the next subclass / original window procedure.
+  return DefSubclassProc(hwnd, message, wparam, lparam);
 }
 
 void FlutterImePlugin::SetupWndProcHook() {
-  if (original_wndproc_ || !flutter_hwnd_) return;
+  if (hooked_ || !flutter_hwnd_) return;
 
-  original_wndproc_ = reinterpret_cast<WNDPROC>(
-      SetWindowLongPtr(flutter_hwnd_, GWLP_WNDPROC,
-                       reinterpret_cast<LONG_PTR>(WndProcHook)));
+  if (SetWindowSubclass(flutter_hwnd_, &SubclassProc, kSubclassId,
+                        reinterpret_cast<DWORD_PTR>(this))) {
+    hooked_ = true;
+  }
 }
 
 void FlutterImePlugin::RemoveWndProcHook() {
-  if (original_wndproc_ && flutter_hwnd_) {
-    SetWindowLongPtr(flutter_hwnd_, GWLP_WNDPROC,
-                     reinterpret_cast<LONG_PTR>(original_wndproc_));
-    original_wndproc_ = nullptr;
+  if (hooked_ && flutter_hwnd_) {
+    RemoveWindowSubclass(flutter_hwnd_, &SubclassProc, kSubclassId);
+    hooked_ = false;
   }
 }
 
