@@ -95,6 +95,26 @@ void main() {
     });
   });
 
+  group('input-source token is opaque', () {
+    test('a saved token is sent back to setInputSource byte-for-byte', () async {
+      // A Windows-style token whose colons a naive parser might split on. The
+      // Dart layer must treat it as an opaque value: save it, restore it,
+      // unchanged. All parsing lives natively.
+      const String token = '00000412:1:0';
+      responder =
+          (MethodCall call) => call.method == 'getCurrentInputSource' ? token : null;
+
+      final String? saved = await platform.getCurrentInputSource();
+      expect(saved, token);
+
+      await platform.setInputSource(saved!);
+
+      final MethodCall setCall =
+          log.firstWhere((MethodCall c) => c.method == 'setInputSource');
+      expect(setCall.arguments, <String, Object?>{'sourceId': token});
+    });
+  });
+
   group('onInputSourceChanged stream', () {
     const EventChannel eventChannel =
         EventChannel('flutter_ime/input_source_changed');

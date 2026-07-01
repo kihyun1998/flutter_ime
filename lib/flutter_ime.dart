@@ -62,10 +62,14 @@ Future<bool> isEnglishKeyboard() async {
   return FlutterImePlatform.instance.isEnglishKeyboard();
 }
 
-/// Gets the current input source ID.
+/// Gets the current input source as an opaque token.
 ///
-/// Returns the unique identifier of the currently active keyboard input source.
-/// This can be saved and later restored using [setInputSource].
+/// Returns a token identifying the currently active keyboard input source.
+/// Save it as-is and later restore it with [setInputSource].
+///
+/// **Treat the value as opaque**: it is platform-specific and its format is an
+/// implementation detail. Do not parse, compare, or construct it yourself — all
+/// interpretation happens natively. The examples below are illustrative only.
 ///
 /// ## Platform Support
 /// - **macOS**: Returns input source ID (e.g., "com.apple.keylayout.ABC",
@@ -99,9 +103,11 @@ Future<String?> getCurrentInputSource() async {
   return FlutterImePlatform.instance.getCurrentInputSource();
 }
 
-/// Sets the keyboard input source by its ID.
+/// Restores a keyboard input source from an opaque token.
 ///
-/// Use this to restore a previously saved input source from [getCurrentInputSource].
+/// Use this to restore a token previously saved from [getCurrentInputSource].
+/// Pass the saved token back unchanged — do not construct or modify it. The
+/// token is platform-specific and is parsed only natively.
 ///
 /// ## Platform Support
 /// - **macOS**: Sets the input source using Carbon Text Input Source Services API

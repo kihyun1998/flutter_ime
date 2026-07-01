@@ -30,12 +30,14 @@ abstract class FlutterImePlatform extends PlatformInterface {
     throw UnimplementedError('isEnglishKeyboard() must be implemented');
   }
 
-  /// Gets the current input source ID (macOS only).
+  /// Gets the current input source as an opaque, platform-specific token
+  /// (macOS and Windows). Callers must only round-trip it via [setInputSource].
   Future<String?> getCurrentInputSource() async {
     throw UnimplementedError('getCurrentInputSource() must be implemented');
   }
 
-  /// Sets the input source by ID (macOS only).
+  /// Restores an input source from an opaque token previously returned by
+  /// [getCurrentInputSource] (macOS and Windows).
   Future<void> setInputSource(String sourceId) async {
     throw UnimplementedError('setInputSource() must be implemented');
   }

@@ -179,6 +179,8 @@ class _MyPageState extends State<MyPage> {
 
 Save the keyboard state before switching to English, then restore it when the field loses focus:
 
+> **Note:** The value from `getCurrentInputSource()` is an **opaque token**. Its format is platform-specific and may change — save it and pass it back to `setInputSource()` unchanged. Don't parse or construct it yourself.
+
 ```dart
 class _MyPageState extends State<MyPage> {
   final _focusNode = FocusNode();
