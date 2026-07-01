@@ -14,8 +14,7 @@ class MethodChannelFlutterIme extends FlutterImePlatform {
 
   /// The event channel instance for input source changes.
   @visibleForTesting
-  final eventChannel =
-      const EventChannel(ImeChannels.inputSourceChangedEvent);
+  final eventChannel = const EventChannel(ImeChannels.inputSourceChangedEvent);
 
   /// The event channel instance for Caps Lock changes.
   @visibleForTesting

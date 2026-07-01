@@ -96,13 +96,14 @@ void main() {
   });
 
   group('input-source token is opaque', () {
-    test('a saved token is sent back to setInputSource byte-for-byte', () async {
+    test('a saved token is sent back to setInputSource byte-for-byte',
+        () async {
       // A Windows-style token whose colons a naive parser might split on. The
       // Dart layer must treat it as an opaque value: save it, restore it,
       // unchanged. All parsing lives natively.
       const String token = '00000412:1:0';
-      responder =
-          (MethodCall call) => call.method == 'getCurrentInputSource' ? token : null;
+      responder = (MethodCall call) =>
+          call.method == 'getCurrentInputSource' ? token : null;
 
       final String? saved = await platform.getCurrentInputSource();
       expect(saved, token);
