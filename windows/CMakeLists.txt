@@ -20,6 +20,11 @@ set(PLUGIN_NAME "flutter_ime_plugin")
 list(APPEND PLUGIN_SOURCES
   "flutter_ime_plugin.cpp"
   "flutter_ime_plugin.h"
+  "input_source_manager.cpp"
+  "input_source_manager.h"
+  "caps_lock_manager.cpp"
+  "caps_lock_manager.h"
+  "ime_channel_constants.h"
 )
 
 # Define the plugin library target. Its name must not be changed (see comment

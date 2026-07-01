@@ -1,4 +1,4 @@
-﻿#ifndef FLUTTER_PLUGIN_FLUTTER_IME_PLUGIN_H_
+#ifndef FLUTTER_PLUGIN_FLUTTER_IME_PLUGIN_H_
 #define FLUTTER_PLUGIN_FLUTTER_IME_PLUGIN_H_
 
 #include <flutter/method_channel.h>
@@ -7,12 +7,15 @@
 #include <flutter/plugin_registrar_windows.h>
 
 #include <windows.h>
-#include <imm.h>
 #include <memory>
-#include <functional>
+
+#include "caps_lock_manager.h"
+#include "input_source_manager.h"
 
 namespace flutter_ime {
 
+// Thin plugin shell: registers the channels, owns the window-procedure hook,
+// and dispatches method calls and hooked messages to the feature managers.
 class FlutterImePlugin : public flutter::Plugin {
  public:
   static void RegisterWithRegistrar(flutter::PluginRegistrarWindows *registrar);
@@ -30,20 +33,11 @@ class FlutterImePlugin : public flutter::Plugin {
       const flutter::MethodCall<flutter::EncodableValue> &method_call,
       std::unique_ptr<flutter::MethodResult<flutter::EncodableValue>> result);
 
-  // IME utility functions
-  bool SetEnglishKeyboard();
-  bool IsEnglishKeyboard();
-  bool DisableIME();
-  bool EnableIME();
-  bool IsCapsLockOn();
-  std::string GetCurrentInputSource();
-  bool SetInputSource(const std::string& sourceId);
-
  private:
-  // Get Flutter view HWND
+  // Get Flutter view HWND.
   HWND GetFlutterViewHwnd();
 
-  // WndProc hook functions
+  // WndProc hook functions.
   static LRESULT CALLBACK WndProcHook(HWND hwnd, UINT message, WPARAM wparam, LPARAM lparam);
   void SetupWndProcHook();
   void RemoveWndProcHook();
@@ -51,24 +45,18 @@ class FlutterImePlugin : public flutter::Plugin {
   flutter::PluginRegistrarWindows *registrar_ = nullptr;
   HWND flutter_hwnd_ = nullptr;
 
-  // WndProc hook members
+  // WndProc hook members. Still static (single-window assumption); removing the
+  // static global state is tracked as a follow-up.
   static FlutterImePlugin* instance_;
   static WNDPROC original_wndproc_;
-  static bool ime_disabled_;
 
-  // EventChannel for input source changes
+  // EventChannels (stream handlers forward sinks to the managers).
   std::unique_ptr<flutter::EventChannel<flutter::EncodableValue>> event_channel_;
-  std::unique_ptr<flutter::EventSink<flutter::EncodableValue>> event_sink_;
-
-  // EventChannel for Caps Lock state changes
   std::unique_ptr<flutter::EventChannel<flutter::EncodableValue>> caps_lock_event_channel_;
-  std::unique_ptr<flutter::EventSink<flutter::EncodableValue>> caps_lock_event_sink_;
 
-  void SendInputSourceChangedEvent(bool is_english);
-  void SendCapsLockChangedEvent(bool is_caps_lock_on);
-
-  // Track Caps Lock state
-  static bool last_caps_lock_state_;
+  // Feature managers.
+  std::unique_ptr<InputSourceManager> input_source_manager_;
+  std::unique_ptr<CapsLockManager> caps_lock_manager_;
 };
 
 }  // namespace flutter_ime
