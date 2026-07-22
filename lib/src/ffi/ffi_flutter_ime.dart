@@ -182,7 +182,7 @@ class FfiFlutterIme extends FlutterImePlatform {
     final ime = _windowsIme;
     if (ime == null) return _fallback.onInputSourceChanged;
     return (_inputSourcePoller ??= ValuePoller<bool>(
-      read: ime.isEnglishKeyboard,
+      read: ime.readEnglishStateOrNull,
       interval: _pollInterval,
     ))
         .stream;

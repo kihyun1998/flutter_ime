@@ -88,10 +88,23 @@ class WindowsIme {
   ///
   /// Returns false when there is no window or no IME context, matching the
   /// native plugin's behaviour.
-  bool isEnglishKeyboard() {
+  bool isEnglishKeyboard() => readEnglishStateOrNull() ?? false;
+
+  /// The English state for the input-source stream to poll, or null while it
+  /// cannot be read.
+  ///
+  /// Distinct from [isEnglishKeyboard], which collapses "unreadable" to false
+  /// for fidelity with 2.x. That collapse is wrong for a change stream: while
+  /// [disableIme] has the IME context detached the conversion state is simply
+  /// unknown, and reporting it as "not English" would announce an input-source
+  /// change on every disable and another on every enable — neither of which
+  /// happened. Returning null makes the poller hold its baseline instead, so a
+  /// layout the user really did change while the IME was disabled is still
+  /// picked up once it becomes readable again.
+  bool? readEnglishStateOrNull() {
     final window = _resolver.resolve();
     final status = _withImeContext(window, _readConversionStatus);
-    if (status == null) return false;
+    if (status == null) return null;
     return isEnglishConversionMode(status.conversion);
   }
 

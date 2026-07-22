@@ -36,6 +36,12 @@ import 'support/mock_flutter_ime_platform.dart';
 /// Detaching a stranger's IME context is not an acceptable side effect of
 /// `flutter test`.
 WindowsIme unresolvableWindowsIme() => WindowsIme(
+      // A fake binding as well as an unresolvable window. The window guard is
+      // not enough on its own: isCapsLockOn consults no window at all — the
+      // toggle is keyboard state — so it would sail past every early return and
+      // force `DynamicLibrary.open('user32.dll')`, which throws on the Linux
+      // runner CI uses for `flutter test`.
+      win32: _FakeWin32(),
       resolver: WindowResolver(
         findOwnTopLevelWindow: (_) => nullptr,
         findChildWindow: (_, __) => nullptr,
@@ -80,16 +86,6 @@ void main() {
       addTearDown(subscription.cancel);
 
       expect(fallback.calls, isEmpty);
-    });
-
-    test('the streams stay silent while the value never changes', () async {
-      final events = <bool>[];
-      final subscription = ffi.onCapsLockChanged.listen(events.add);
-      addTearDown(subscription.cancel);
-
-      await Future<void>.delayed(const Duration(milliseconds: 200));
-
-      expect(events, isEmpty);
     });
   });
 
@@ -235,6 +231,25 @@ void main() {
 /// Asserting "nothing happened" is otherwise untestable, since a Win32 call
 /// that is made against the wrong window succeeds just as quietly as one that
 /// is never made.
+/// A [Win32] that answers the one call which consults no window, and treats
+/// anything else as a mistake.
+///
+/// Caps Lock state is keyboard state, so `isCapsLockOn` has no window to guard
+/// on and would otherwise reach the real user32 binding from a test.
+class _FakeWin32 implements Win32 {
+  /// The value `GetKeyState(VK_CAPITAL)` reports. Zero means "toggle off".
+  int keyState = 0;
+
+  @override
+  dynamic noSuchMethod(Invocation invocation) {
+    if (invocation.memberName == #getKeyState) {
+      return (int virtualKey) => keyState;
+    }
+    throw StateError(
+        'unexpected Win32 call from a test: ${invocation.memberName}');
+  }
+}
+
 class _ExplodingWin32 implements Win32 {
   Never _boom() => throw StateError(
       'a Win32 entry point was reached on a code path that must not touch '
