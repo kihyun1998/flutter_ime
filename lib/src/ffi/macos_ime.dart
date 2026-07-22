@@ -95,6 +95,25 @@ class MacosIme {
   /// Reads hardware modifier state, so it needs no window and no focus. See
   /// [CoreGraphics.eventSourceFlagsState] for why it also needs no permission,
   /// which is the point of it.
+  ///
+  /// **A language switch briefly turns Caps Lock on, and that is real.** The
+  /// Caps Lock key doubles as the input-source switch on macOS, and pressing it
+  /// to change language genuinely toggles the lock on and off again — about
+  /// twelve milliseconds for a quick tap, longer if the key is held. This
+  /// reports it because it happened. A change stream polling at fifty
+  /// milliseconds lands inside that window roughly one time in four, so
+  /// switching to Korean sometimes announces a Caps Lock toggle the user did
+  /// not mean to make.
+  ///
+  /// Filtering it out was tried and reverted; the reasoning is worth not
+  /// repeating. There is no second piece of state that separates the two
+  /// cases: the alpha-shift flag *is* the lock, and `CGEventSourceKeyState`
+  /// for the Caps Lock key reports that same lock rather than whether the key
+  /// is held — measured with Caps Lock on and nobody touching the keyboard,
+  /// both read true. The only difference between a language switch and a real
+  /// toggle is how long it lasts, so anything that separates them is a timing
+  /// heuristic with a threshold that has to be defended. Reporting the truth
+  /// was judged better than guessing at one.
   bool isCapsLockOn() =>
       (_cg.eventSourceFlagsState(cgEventSourceStateHidSystemState) &
           cgEventFlagMaskAlphaShift) !=
