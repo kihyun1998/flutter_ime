@@ -20,7 +20,7 @@ class FfiFlutterIme extends FlutterImePlatform {
       'flutter_ime has no FFI implementation on this platform.');
 
   /// Always null here; the real implementation reports the resolved window.
-  String? get windowDiagnostics => null;
+  String? describeResolvedWindow() => null;
 
   @override
   Future<void> setEnglishKeyboard() async => _unsupported();

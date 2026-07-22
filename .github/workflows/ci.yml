@@ -36,6 +36,15 @@ jobs:
       - name: Test
         run: flutter test
 
+      # The package must stay importable from an app that also targets web.
+      # `dart:ffi` does not exist there, so a stray unconditional import would
+      # break every such consumer's build — and nothing else in CI would catch
+      # it. Building the example exercises the real conditional import, since
+      # the example imports the FFI entry point.
+      - name: Build example for web
+        working-directory: example
+        run: flutter build web
+
   windows:
     name: Windows
     runs-on: windows-latest
