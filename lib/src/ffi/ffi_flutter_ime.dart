@@ -135,6 +135,10 @@ class FfiFlutterIme extends FlutterImePlatform {
   }
 
   /// Restores normal IME functionality after [disableIME].
+  ///
+  /// Does nothing if the target window cannot be resolved, and — like
+  /// [disableIME] — reports that by staying silent rather than raising, where
+  /// 2.x raised a `PlatformException`.
   @override
   Future<void> enableIME() async {
     final ime = _windowsIme;

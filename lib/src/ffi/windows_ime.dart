@@ -112,10 +112,10 @@ class WindowsIme {
   /// did — paste bypassed the native plugin's interception too, because it
   /// never travels through the keyboard message path.
   ///
-  /// Returns false only when there is no window to operate on.
+  /// Returns false when there is no window of our own to operate on.
   bool disableIme() {
     final window = _resolver.resolve();
-    if (!window.isUsable) return false;
+    if (!_isOwnWindow(window)) return false;
 
     // A null context with no flags removes the association entirely.
     _win32.immAssociateContextEx(window.handle, nullptr, 0);
@@ -124,14 +124,27 @@ class WindowsIme {
 
   /// Restores the window's default IME context, undoing [disableIme].
   ///
-  /// Returns false only when there is no window to operate on.
+  /// Returns false when there is no window of our own to operate on.
   bool enableIme() {
     final window = _resolver.resolve();
-    if (!window.isUsable) return false;
+    if (!_isOwnWindow(window)) return false;
 
     _win32.immAssociateContextEx(window.handle, nullptr, iaceDefault);
     return true;
   }
+
+  /// Whether [window] is one we positively identified as belonging to this
+  /// process, rather than the foreground-window guess.
+  ///
+  /// Only the IME-association calls check this. Everything else here reads or
+  /// writes conversion state, which is transient and self-correcting; detaching
+  /// an IME context is destructive and persists until something re-attaches it.
+  /// Applying that to a foreground window that turned out to be another
+  /// application's would disable the IME in a program the user is typing in,
+  /// invisibly and with nothing to put it back. Refusing is the safer failure,
+  /// and the no-window case is already a documented no-op.
+  bool _isOwnWindow(ResolvedWindow window) =>
+      window.isUsable && window.source != WindowResolution.foregroundWindow;
 
   /// Reads the current keyboard layout and IME conversion state as an opaque
   /// token, or null if the layout could not be read.

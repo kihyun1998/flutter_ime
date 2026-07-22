@@ -18,6 +18,7 @@ import 'dart:ffi';
 // stub — which cannot name `WindowsIme`, since naming it would drag `dart:ffi`
 // into the web build. This test is VM-only anyway, having just imported it.
 import 'package:flutter_ime/src/ffi/ffi_flutter_ime.dart';
+import 'package:flutter_ime/src/ffi/win32.dart';
 import 'package:flutter_ime/src/ffi/window_resolver.dart';
 import 'package:flutter_ime/src/ffi/windows_ime.dart';
 import 'package:flutter_test/flutter_test.dart';
@@ -132,6 +133,44 @@ void main() {
     });
   });
 
+  group('IME association refuses a foreground-window guess', () {
+    // Detaching an IME context is destructive and persists. Everything else
+    // here writes transient conversion state, so a wrong window self-corrects;
+    // this one would leave another application's IME disabled with nothing to
+    // put it back.
+    late MockFlutterImePlatform foregroundFallback;
+    late FfiFlutterIme foregroundFfi;
+
+    setUp(() {
+      foregroundFallback = MockFlutterImePlatform();
+      foregroundFfi = FfiFlutterIme(
+        windowsIme: WindowsIme(
+          win32: _ExplodingWin32(),
+          resolver: WindowResolver(
+            // No window of ours, so resolution falls back to the foreground.
+            findOwnTopLevelWindow: (_) => nullptr,
+            findChildWindow: (_, __) => nullptr,
+            getForegroundWindow: () => Pointer<Void>.fromAddress(0xBEEF),
+            isWindowAlive: (_) => true,
+          ),
+        ),
+        fallback: foregroundFallback,
+      );
+    });
+
+    tearDown(() => foregroundFallback.dispose());
+
+    test('disableIME does not touch a foreground window', () async {
+      // _ExplodingWin32 throws if any Win32 entry point is reached, so
+      // completing normally is the assertion.
+      await expectLater(foregroundFfi.disableIME(), completes);
+    });
+
+    test('enableIME does not touch a foreground window', () async {
+      await expectLater(foregroundFfi.enableIME(), completes);
+    });
+  });
+
   group('an unresolvable window degrades rather than failing', () {
     // Ticket #12 requires the no-window case to be a documented no-op instead
     // of an error. Every ported operation has to hold that line.
@@ -144,4 +183,19 @@ void main() {
       await expectLater(ffi.enableIME(), completes);
     });
   });
+}
+
+/// A [Win32] whose every entry point throws.
+///
+/// Used to assert a negative: that a code path reaches no system call at all.
+/// Asserting "nothing happened" is otherwise untestable, since a Win32 call
+/// that is made against the wrong window succeeds just as quietly as one that
+/// is never made.
+class _ExplodingWin32 implements Win32 {
+  Never _boom() => throw StateError(
+      'a Win32 entry point was reached on a code path that must not touch '
+      'the operating system');
+
+  @override
+  dynamic noSuchMethod(Invocation invocation) => _boom();
 }

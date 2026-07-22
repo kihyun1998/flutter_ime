@@ -772,6 +772,22 @@ class _FfiPageState extends State<FfiPage> {
       _installed = true;
       _window = ffi.describeResolvedWindow() ?? '(none)';
     }
+
+    // The guarded field is guarded here, and only here. Without this the field
+    // is guarded in name only: Hangul types through it normally and the readout
+    // reports a failure that belongs to the demo, not to the implementation.
+    _guardedFocus.addListener(() {
+      if (_guardedFocus.hasFocus) {
+        disableIME();
+      } else {
+        enableIME();
+      }
+    });
+
+    // The readouts are computed during build, so they need a rebuild per
+    // keystroke or they sit at "(nothing typed)" while text goes in.
+    _guardedController.addListener(() => setState(() {}));
+    _controlController.addListener(() => setState(() {}));
   }
 
   @override
@@ -817,13 +833,8 @@ class _FfiPageState extends State<FfiPage> {
     await _check();
   }
 
-  /// Fires the same calls three seconds later, so they can be made to land
-  /// while this window is NOT focused — click another app after pressing.
-  ///
-  /// Window *lookup* is focus-independent by construction (FindWindowEx matches
-  /// on class and process id). What this actually probes is whether IMM32 will
-  /// operate on a window that is not in the foreground, which cannot be
-  /// reasoned about from the outside.
+  /// Reports whether [text] contains Hangul and whether that matches
+  /// [wantHangul], listing the code points either way.
   Widget _hangulReadout(String label, String text, {required bool wantHangul}) {
     final has = _containsHangul(text);
     final ok = has == wantHangul;
@@ -870,13 +881,6 @@ class _FfiPageState extends State<FfiPage> {
     _append('while unfocused: window=$resolved  isEnglish=$english');
   }
 
-  /// Reads the token through BOTH implementations back to back and reports
-  /// whether they agree.
-  ///
-  /// The token format is a hard compatibility requirement — consumers persist
-  /// these, so one written by 2.x must still restore after upgrading. `_previous`
-  /// is the method-channel implementation this page displaced on entry, so both
-  /// reads see the same keyboard state a moment apart.
   /// Runs disable/enable back to back several times. The acceptance criterion
   /// is that the IME still works afterwards, which the control field shows.
   Future<void> _runCycles() async {
@@ -900,6 +904,13 @@ class _FfiPageState extends State<FfiPage> {
       .map((r) => 'U+${r.toRadixString(16).toUpperCase().padLeft(4, '0')}')
       .join(' ');
 
+  /// Reads the token through BOTH implementations back to back and reports
+  /// whether they agree.
+  ///
+  /// The token format is a hard compatibility requirement — consumers persist
+  /// these, so one written by 2.x must still restore after upgrading.
+  /// `_previous` is the method-channel implementation this page displaced on
+  /// entry, so both reads see the same keyboard state a moment apart.
   Future<void> _compareWithNative() async {
     final ffiToken = await getCurrentInputSource();
     final nativeToken = await _previous?.getCurrentInputSource();
