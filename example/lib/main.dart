@@ -796,6 +796,11 @@ class _FfiPageState extends State<FfiPage> {
 
     // Both streams are polled on Windows. Nothing is polled until these
     // subscriptions exist, and the pollers stop again when they are cancelled.
+    _subscribe();
+  }
+
+  void _subscribe() {
+    if (_capsSub != null) return;
     _capsSub = onCapsLockChanged().listen((on) {
       setState(() {
         _capsLive = on;
@@ -808,6 +813,17 @@ class _FfiPageState extends State<FfiPage> {
     });
   }
 
+  /// Drops the subscriptions without touching widget state, so it is safe from
+  /// deactivate and dispose where setState would throw.
+  void _cancelSubscriptions() {
+    _capsSub?.cancel();
+    _capsSub = null;
+    _sourceSub?.cancel();
+    _sourceSub = null;
+  }
+
+  bool get _streaming => _capsSub != null;
+
   @override
   void deactivate() {
     // Restore here rather than in dispose. A page transition runs the incoming
@@ -815,28 +831,27 @@ class _FfiPageState extends State<FfiPage> {
     // dispose would leave the FFI instance installed while the next page is
     // already using it — which matters for the Input Source page, whose whole
     // purpose here is to show what the *native* implementation reports.
-    _restorePlatform();
+    _detachFfi();
     super.deactivate();
   }
 
   @override
   void dispose() {
-    _restorePlatform();
+    _detachFfi();
     _guardedController.dispose();
     _guardedFocus.dispose();
     _controlController.dispose();
     super.dispose();
   }
 
-  /// Idempotent: deactivate can run without a following dispose, and an element
-  /// can be reactivated after being deactivated.
-  void _restorePlatform() {
+  /// Detaches everything this page installed: the stream subscriptions and the
+  /// FFI platform instance.
+  ///
+  /// Idempotent, because deactivate can run without a following dispose.
+  void _detachFfi() {
     // Cancel first: these subscriptions belong to the FFI instance's pollers,
     // and leaving them attached would keep polling after this page is gone.
-    _capsSub?.cancel();
-    _capsSub = null;
-    _sourceSub?.cancel();
-    _sourceSub = null;
+    _cancelSubscriptions();
 
     final previous = _previous;
     if (_installed && previous != null) {
@@ -1069,6 +1084,24 @@ class _FfiPageState extends State<FfiPage> {
             'repeats a value.',
           ),
           const SizedBox(height: 12),
+          Row(children: [
+            Switch(
+              value: _streaming,
+              onChanged: (on) => setState(() {
+                if (on) {
+                  _subscribe();
+                } else {
+                  _cancelSubscriptions();
+                  _capsLive = null;
+                }
+              }),
+            ),
+            const SizedBox(width: 8),
+            Text(_streaming
+                ? 'subscribed — polling every 50ms'
+                : 'unsubscribed — nothing is polled'),
+          ]),
+          const SizedBox(height: 8),
           Row(children: [
             Icon(Icons.keyboard_capslock,
                 color: _capsLive == true ? Colors.orange : Colors.grey),
