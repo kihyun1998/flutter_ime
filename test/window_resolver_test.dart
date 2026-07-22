@@ -1,4 +1,7 @@
-@TestOn('windows')
+// Deliberately not @TestOn('windows'): every window lookup here is faked, so
+// nothing touches the Win32 bindings and these run anywhere `dart:ffi` exists.
+// CI runs `flutter test` on Linux, where a Windows-only annotation would have
+// silently skipped the whole file.
 library;
 
 import 'dart:ffi';
@@ -37,8 +40,7 @@ WindowResolver buildResolver({
 void main() {
   group('precedence', () {
     test('prefers the Flutter view child, matching the native plugin', () {
-      final resolved =
-          buildResolver(topLevel: runner, child: view).resolve();
+      final resolved = buildResolver(topLevel: runner, child: view).resolve();
 
       expect(resolved.handle, view);
       expect(resolved.source, WindowResolution.flutterView);
@@ -53,8 +55,7 @@ void main() {
 
     test('falls back to the foreground window when no runner window is ours',
         () {
-      final resolved =
-          buildResolver(foregroundWindow: foreground).resolve();
+      final resolved = buildResolver(foregroundWindow: foreground).resolve();
 
       expect(resolved.handle, foreground);
       expect(resolved.source, WindowResolution.foregroundWindow);
@@ -111,19 +112,46 @@ void main() {
       expect(lookups, 2);
     });
 
-    test('searches again after being explicitly invalidated', () {
+    test('never caches a foreground-window fallback', () {
       var lookups = 0;
       final resolver = buildResolver(
-        topLevel: runner,
-        child: view,
+        foregroundWindow: foreground,
         onTopLevelLookup: (_) => lookups++,
       );
 
-      resolver.resolve();
-      resolver.invalidate();
-      resolver.resolve();
+      final first = resolver.resolve();
+      final second = resolver.resolve();
 
-      expect(lookups, 2);
+      expect(first.source, WindowResolution.foregroundWindow);
+      expect(second.source, WindowResolution.foregroundWindow);
+      // The foreground window is a guess about which window is ours. Caching it
+      // would pin every later IMM32 call to whatever was focused at that
+      // moment — possibly another process's window — for the rest of the run.
+      expect(lookups, 2, reason: 'the fallback must be re-derived every time');
+    });
+
+    test('starts caching again once a window of our own appears', () {
+      var lookups = 0;
+      Handle32? ownWindow;
+      final resolver = WindowResolver(
+        findOwnTopLevelWindow: (_) {
+          lookups++;
+          return ownWindow ?? nullptr;
+        },
+        findChildWindow: (parent, className) => view,
+        getForegroundWindow: () => foreground,
+        isWindowAlive: (_) => true,
+      );
+
+      expect(resolver.resolve().source, WindowResolution.foregroundWindow);
+
+      // The runner window finishes being created.
+      ownWindow = runner;
+      expect(resolver.resolve().source, WindowResolution.flutterView);
+
+      final before = lookups;
+      resolver.resolve();
+      expect(lookups, before, reason: 'a window we identified is cached');
     });
 
     test('keeps retrying while nothing is resolvable', () {

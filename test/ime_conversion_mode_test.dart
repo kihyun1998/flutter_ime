@@ -18,7 +18,8 @@ void main() {
       // Korean IME in Hangul mode reports NATIVE|FULLSHAPE.
       expect(isEnglishConversionMode(imeCmodeNative | 0x0008), isFalse);
       // Japanese IME in Katakana mode reports NATIVE|KATAKANA|FULLSHAPE.
-      expect(isEnglishConversionMode(imeCmodeNative | 0x0002 | 0x0008), isFalse);
+      expect(
+          isEnglishConversionMode(imeCmodeNative | 0x0002 | 0x0008), isFalse);
     });
 
     test('non-native flags without the native bit are still English', () {
@@ -40,7 +41,8 @@ void main() {
         expect(
           isEnglishConversionMode(withoutNative | imeCmodeNative),
           isFalse,
-          reason: 'conversion 0x${(withoutNative | imeCmodeNative).toRadixString(16)} '
+          reason:
+              'conversion 0x${(withoutNative | imeCmodeNative).toRadixString(16)} '
               'has the NATIVE bit and must read as non-English',
         );
       }

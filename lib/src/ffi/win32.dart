@@ -36,8 +36,7 @@ typedef _FindWindowExNative = Handle32 Function(
     Handle32, Handle32, Pointer<Utf16>, Pointer<Utf16>);
 typedef _GetWindowThreadProcessIdNative = Uint32 Function(
     Handle32, Pointer<Uint32>);
-typedef _GetWindowThreadProcessIdDart = int Function(
-    Handle32, Pointer<Uint32>);
+typedef _GetWindowThreadProcessIdDart = int Function(Handle32, Pointer<Uint32>);
 typedef _GetForegroundWindowNative = Handle32 Function();
 typedef _IsWindowNative = Int32 Function(Handle32);
 typedef _IsWindowDart = int Function(Handle32);
@@ -65,8 +64,9 @@ class Win32 {
       _imm32.lookupFunction<_ImmGetContextNative, _ImmGetContextNative>(
           'ImmGetContext');
 
-  late final immReleaseContext = _imm32.lookupFunction<
-      _ImmReleaseContextNative, _ImmReleaseContextDart>('ImmReleaseContext');
+  late final immReleaseContext =
+      _imm32.lookupFunction<_ImmReleaseContextNative, _ImmReleaseContextDart>(
+          'ImmReleaseContext');
 
   late final immGetConversionStatus = _imm32.lookupFunction<
       _ImmGetConversionStatusNative,

@@ -79,13 +79,18 @@ class WindowResolver {
     FindChildWindow? findChildWindow,
     GetForegroundWindow? getForegroundWindow,
     IsWindowAlive? isWindowAlive,
-    Win32? win32,
   }) {
-    final calls = _Win32WindowCalls(win32 ?? Win32.instance);
-    _findOwnTopLevelWindow = findOwnTopLevelWindow ?? calls.findOwnTopLevel;
-    _findChildWindow = findChildWindow ?? calls.findChild;
-    _getForegroundWindow = getForegroundWindow ?? calls.foreground;
-    _isWindowAlive = isWindowAlive ?? calls.isAlive;
+    // Only reach for the real Win32 bindings if something was left unstubbed,
+    // so a fully faked resolver never touches `Win32.instance`.
+    _Win32WindowCalls? calls;
+    _Win32WindowCalls real() => calls ??= _Win32WindowCalls(Win32.instance);
+
+    _findOwnTopLevelWindow =
+        findOwnTopLevelWindow ?? (name) => real().findOwnTopLevel(name);
+    _findChildWindow =
+        findChildWindow ?? (parent, name) => real().findChild(parent, name);
+    _getForegroundWindow = getForegroundWindow ?? () => real().foreground();
+    _isWindowAlive = isWindowAlive ?? (handle) => real().isAlive(handle);
   }
 
   late final FindOwnTopLevelWindow _findOwnTopLevelWindow;
@@ -95,9 +100,6 @@ class WindowResolver {
 
   ResolvedWindow? _cached;
 
-  /// Drops the cached handle, forcing the next [resolve] to search again.
-  void invalidate() => _cached = null;
-
   /// Returns the window to operate on, searching only when there is no cached
   /// handle or the cached one is no longer a live window.
   ResolvedWindow resolve() {
@@ -105,7 +107,15 @@ class WindowResolver {
     if (cached != null && cached.isUsable && _isWindowAlive(cached.handle)) {
       return cached;
     }
-    return _cached = _search();
+
+    final found = _search();
+    // Only a window we positively identified as ours is worth caching. A
+    // foreground-window result is a guess about which window is ours, and
+    // caching it would pin every later IMM32 call to whatever happened to be
+    // focused at that moment — potentially another process's window, silently
+    // and permanently.
+    _cached = found.source == WindowResolution.foregroundWindow ? null : found;
+    return found;
   }
 
   ResolvedWindow _search() {
@@ -140,7 +150,10 @@ class _Win32WindowCalls {
   /// at the same time has windows of the same class.
   Handle32 findOwnTopLevel(String className) {
     final ownPid = _win32.getCurrentProcessId();
-    final classNamePtr = className.toNativeUtf16();
+    // Allocate with the same allocator we free with. `toNativeUtf16` defaults
+    // to `malloc`; mixing that with `calloc.free` happens to work today but
+    // leans on an implementation detail of package:ffi.
+    final classNamePtr = className.toNativeUtf16(allocator: calloc);
     final pidOut = calloc<Uint32>();
     try {
       Handle32 current = nullptr;
@@ -157,7 +170,7 @@ class _Win32WindowCalls {
   }
 
   Handle32 findChild(Handle32 parent, String className) {
-    final classNamePtr = className.toNativeUtf16();
+    final classNamePtr = className.toNativeUtf16(allocator: calloc);
     try {
       return _win32.findWindowEx(parent, nullptr, classNamePtr, nullptr);
     } finally {

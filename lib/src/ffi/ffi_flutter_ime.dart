@@ -22,18 +22,19 @@ import 'windows_ime.dart';
 /// installed, in which case they throw until their own tickets land.
 class FfiFlutterIme extends FlutterImePlatform {
   FfiFlutterIme({WindowsIme? windowsIme})
-      : _windowsIme =
-            windowsIme ?? (Platform.isWindows ? WindowsIme() : null);
+      : _windowsIme = windowsIme ?? (Platform.isWindows ? WindowsIme() : null);
 
   final WindowsIme? _windowsIme;
 
-  /// A description of which window the Windows implementation resolved and how
-  /// it found it, or null off Windows.
+  /// Resolves the target window and describes it, or returns null off Windows.
   ///
-  /// Deliberately a string rather than a structured type: it crosses the
-  /// conditional-import boundary, and the web stub cannot name a type that
+  /// A method, not a getter: on a cache miss this walks the process's window
+  /// tree. Call it deliberately — not from a `build`.
+  ///
+  /// Deliberately returns a string rather than a structured type. It crosses
+  /// the conditional-import boundary, and the web stub cannot name a type that
   /// depends on `dart:ffi`. Intended for diagnostics in the example app.
-  String? get windowDiagnostics => _windowsIme?.lastResolution.toString();
+  String? describeResolvedWindow() => _windowsIme?.resolveWindow().toString();
 
   WindowsIme get _windows {
     final ime = _windowsIme;
@@ -45,9 +46,21 @@ class FfiFlutterIme extends FlutterImePlatform {
     return ime;
   }
 
+  /// Switches the IME to English.
+  ///
+  /// Does nothing if the target window cannot be resolved — for example while
+  /// the app has no window of its own to find. This is a deliberate no-op
+  /// rather than an error: the public API returns no value, and callers wire
+  /// this to focus changes where throwing would be worse than doing nothing.
   @override
   Future<void> setEnglishKeyboard() async => _windows.setEnglishKeyboard();
 
+  /// Whether the IME is in English mode.
+  ///
+  /// Returns false when the target window or its IME context cannot be
+  /// reached, which is also what the native plugin reports in that situation.
+  /// A detached IME context — the normal state after `disableIME()` — reads as
+  /// false for the same reason.
   @override
   Future<bool> isEnglishKeyboard() async => _windows.isEnglishKeyboard();
 }

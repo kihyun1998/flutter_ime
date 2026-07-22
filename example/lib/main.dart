@@ -738,9 +738,12 @@ class FfiPage extends StatefulWidget {
 
 class _FfiPageState extends State<FfiPage> {
   FlutterImePlatform? _previous;
-  FfiFlutterIme? _ffi;
   String _log = '';
   bool _installed = false;
+
+  /// Resolved once on entry rather than read during build: resolving walks the
+  /// process's window tree on a cache miss.
+  String _window = '(not resolved)';
 
   @override
   void initState() {
@@ -748,9 +751,9 @@ class _FfiPageState extends State<FfiPage> {
     if (Platform.isWindows) {
       _previous = FlutterImePlatform.instance;
       final ffi = FfiFlutterIme();
-      _ffi = ffi;
       FlutterImePlatform.instance = ffi;
       _installed = true;
+      _window = ffi.describeResolvedWindow() ?? '(none)';
     }
   }
 
@@ -808,7 +811,7 @@ class _FfiPageState extends State<FfiPage> {
                       style: TextStyle(fontWeight: FontWeight.bold)),
                   const SizedBox(height: 4),
                   SelectableText(
-                    _ffi?.windowDiagnostics ?? '(none)',
+                    _window,
                     style:
                         const TextStyle(fontFamily: 'monospace', fontSize: 12),
                   ),
