@@ -258,8 +258,9 @@ void main() {
       final subscription = macosFfi.onCapsLockChanged.listen((_) {});
       addTearDown(subscription.cancel);
 
-      expect(macos.calls, contains('isCapsLockOn'),
-          reason: 'the poller takes a baseline when a listener attaches');
+      expect(macos.calls, contains('readCapsLockOrNull'),
+          reason: 'the poller takes a baseline when a listener attaches, '
+              'through the filter that ignores a held key');
       expect(macosFallback.calls, isEmpty);
     });
 
@@ -448,6 +449,12 @@ class _FakeMacosIme implements MacosIme {
   @override
   bool isCapsLockOn() {
     calls.add('isCapsLockOn');
+    return capsLock;
+  }
+
+  @override
+  bool? readCapsLockOrNull() {
+    calls.add('readCapsLockOrNull');
     return capsLock;
   }
 

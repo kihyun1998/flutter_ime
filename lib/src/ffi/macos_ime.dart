@@ -16,6 +16,7 @@ import 'dart:ffi';
 
 import 'package:ffi/ffi.dart';
 
+import '../caps_lock_state.dart';
 import '../english_input_source.dart';
 import 'core_foundation.dart';
 import 'core_graphics.dart';
@@ -95,7 +96,31 @@ class MacosIme {
   /// Reads hardware modifier state, so it needs no window and no focus. See
   /// [CoreGraphics.eventSourceFlagsState] for why it also needs no permission,
   /// which is the point of it.
-  bool isCapsLockOn() =>
+  ///
+  /// Unfiltered, unlike [readCapsLockOrNull]: a one-shot query has to answer
+  /// something, and landing inside the twelve milliseconds of a key press is
+  /// vanishingly unlikely for a call made on focus. A stream is different —
+  /// it turns every reading it takes into an event.
+  bool isCapsLockOn() => _alphaShiftSet;
+
+  /// The Caps Lock state for the stream to read, or null while the Caps Lock
+  /// key is held and the answer is therefore still a transient.
+  ///
+  /// See [capsLockState] for why a held key has no answer. Briefly: on macOS
+  /// the Caps Lock key is also the input-source switch, so switching to Korean
+  /// pulses the flag for about twelve milliseconds, and a fifty-millisecond
+  /// poll catches that roughly one time in four — which is what made the bug
+  /// intermittent.
+  bool? readCapsLockOrNull() => capsLockState(
+        alphaShiftSet: _alphaShiftSet,
+        keyIsDown: _cg.eventSourceKeyState(
+              cgEventSourceStateHidSystemState,
+              cgKeyCodeCapsLock,
+            ) !=
+            0,
+      );
+
+  bool get _alphaShiftSet =>
       (_cg.eventSourceFlagsState(cgEventSourceStateHidSystemState) &
           cgEventFlagMaskAlphaShift) !=
       0;

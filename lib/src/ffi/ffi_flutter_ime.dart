@@ -304,7 +304,10 @@ class FfiFlutterIme extends FlutterImePlatform {
     final macos = _macosIme;
     if (windows == null && macos == null) return _fallback.onCapsLockChanged;
     return (_capsLockPoller ??= ValuePoller<bool>(
-      read: windows != null ? windows.isCapsLockOn : macos!.isCapsLockOn,
+      // macOS reads through a filter and Windows does not. The Caps Lock key
+      // is the input-source switch on macOS, so a language change pulses the
+      // flag; on Windows that key does nothing of the sort.
+      read: windows != null ? windows.isCapsLockOn : macos!.readCapsLockOrNull,
       interval: _pollInterval,
     ))
         .stream;
