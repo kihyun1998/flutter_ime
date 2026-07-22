@@ -1,27 +1,34 @@
 # flutter_ime
 
-A Flutter plugin for controlling IME (Input Method Editor) state. This plugin helps you manage keyboard input modes in Windows and macOS applications, particularly useful for login forms and password fields where English input is preferred.
+Control the IME (Input Method Editor) from Dart on Windows and macOS — switch to an English keyboard, watch for keyboard changes, and read Caps Lock. Most useful for login forms and other fields where English input is expected.
 
 [![pub package](https://img.shields.io/pub/v/flutter_ime.svg)](https://pub.dev/packages/flutter_ime)
 
+**No native code and no build step.** As of 3.0.0 this is a plain Dart package that calls the system libraries through `dart:ffi`. There is no plugin to register, no CMake or CocoaPods involved, and nothing for your build to compile — adding it cannot break your build the way a plugin's native layer can. It works from a plain Dart program too, not only from Flutter.
+
 ## Features
 
-* Switch to English keyboard mode programmatically on Windows and macOS
-* Check current keyboard input mode
-* Disable/Enable IME completely (Windows only)
-* Detect keyboard layout changes in real-time (Windows, macOS)
-* Detect Caps Lock state and changes (Windows, macOS)
-* Automatic IME mode switching for password fields
-* Native API implementation (Windows IMM32, macOS Carbon)
+* Switch to an English keyboard on Windows and macOS
+* Check the current keyboard mode
+* Disable and re-enable the IME (Windows only)
+* Watch for keyboard layout changes
+* Read Caps Lock and watch it change
+* Safe to call on any platform — unsupported ones return documented defaults
 
 ## Getting started
 
-Add this to your package's `pubspec.yaml` file:
-
 ```yaml
 dependencies:
-  flutter_ime: ^2.1.4
+  flutter_ime: ^3.0.0
 ```
+
+### Upgrading from 2.x
+
+The API is unchanged: every function keeps its name, parameters and return type, and saved input-source tokens still restore. Most apps upgrade by changing the version constraint.
+
+Four behaviours did change. They are listed in the [CHANGELOG](CHANGELOG.md); the two most likely to matter are that failures are now silent rather than raising a `PlatformException`, and that on macOS `isEnglishKeyboard()` now answers `true` for English layouts other than ABC and US.
+
+2.x is frozen but stays published, so `flutter_ime: ^2.1.4` keeps working if you need it. It is not more capable — see the note under [Disable IME](#disable-ime-windows-only) — just older.
 
 ## Usage
 
@@ -93,7 +100,14 @@ class _LoginPageState extends State<LoginPage> {
 }
 ```
 
-### Disable IME Example (Windows only)
+### Disable IME (Windows only)
+
+`disableIME()` detaches the IME from your window, so composition cannot start: the user can switch to a Korean or Japanese keyboard and typing produces nothing.
+
+**It does not prevent pasted text.** Paste never travels the keyboard path, so `Ctrl+V` puts Korean into the field regardless. 2.x documented this as making non-English input "impossible", which it never was — 2.x did not prevent paste either. If you need a guarantee about a field's *value* rather than about typing, filter it in Dart with an `inputFormatter`, which catches paste as well.
+
+Always pair it with `enableIME()`, or the IME stays detached for the rest of the app's life.
+
 
 ```dart
 class _MyPageState extends State<MyPage> {
@@ -296,8 +310,8 @@ class _LoginPageState extends State<LoginPage> {
 | `isEnglishKeyboard()` | Check if current keyboard is English | Windows, macOS |
 | `getCurrentInputSource()` | Get current input source ID | Windows, macOS |
 | `setInputSource(sourceId)` | Set input source by ID | Windows, macOS |
-| `disableIME()` | Disable IME (prevents non-English input) | Windows only |
-| `enableIME()` | Enable IME (restores input method) | Windows only |
+| `disableIME()` | Detach the IME so composition cannot start (does not stop paste) | Windows only |
+| `enableIME()` | Re-attach the IME | Windows only |
 | `onInputSourceChanged()` | Stream that emits when keyboard layout changes | Windows, macOS |
 | `isCapsLockOn()` | Check if Caps Lock is currently on | Windows, macOS |
 | `onCapsLockChanged()` | Stream that emits when Caps Lock state changes | Windows, macOS |
@@ -310,11 +324,29 @@ class _LoginPageState extends State<LoginPage> {
 | macOS    | ✅ | ✅ | ✅ | ✅ | ❌ | ✅ | ✅ | ✅ |
 | Others   | ❌ | ❌ | ❌ | ❌ | ❌ | ❌ | ❌ | ❌ |
 
+Unsupported platforms are safe, not broken: every function returns the default in its documentation — `false`, `null`, an empty stream — rather than throwing, so you can call them from shared code without guarding.
+
+### `isEnglishKeyboard()` means something different on each platform
+
+This has always been true and is worth stating:
+
+* **Windows** — the IME is not in native-language conversion mode. A Korean keyboard in alphanumeric mode answers `true`.
+* **macOS** — the selected layout types English. The question is asked of the layout itself, so **Dvorak, Colemak, British, Australian and Canadian all answer `true`**. 2.x recognised only ABC and US and answered `false` for the rest, which meant the "force English" recipe above dragged those users onto ABC against their will.
+
+### Event delivery differs too
+
+* **macOS** pushes input-source changes from a system notification, so they arrive immediately.
+* **Windows** polls a few times a second. Learning about a change there requires a callback that returns a value synchronously, which is what a window procedure needs and what Dart FFI cannot provide — so polling is the honest option rather than a shortcut. The delay is not perceptible by hand.
+
+Both streams emit only when the value actually changes, and neither emits the value you started from — subscribing captures it as a baseline. Use `isEnglishKeyboard()` or `isCapsLockOn()` for the current value.
+
+**On macOS, a language switch can report a Caps Lock toggle.** The Caps Lock key doubles as the input-source switch, so changing language really does turn the lock on and off again for about twelve milliseconds, and a polled stream sometimes catches it. A warning indicator driven by `onCapsLockChanged()` will flicker when the user switches language.
+
 ## Requirements
 
-* Windows 7 or later (for Windows)
-* macOS 10.10 or later (for macOS)
-* Flutter SDK 3.0.0 or later
+* Dart SDK 3.4 or later
+* Windows 7 or later, macOS 10.11 or later
+* Flutter is **not** required — the package works from a plain Dart program
 
 ## License
 

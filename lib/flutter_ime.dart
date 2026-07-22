@@ -7,9 +7,15 @@ import 'src/platform_support.dart';
 /// such as password fields, code editors, or ID fields.
 ///
 /// ## Platform Support
-/// - **Windows**: Uses IMM32 API to set conversion mode to alphanumeric
-/// - **macOS**: Switches to ABC keyboard layout
+/// - **Windows**: Sets the IME conversion mode to alphanumeric
+/// - **macOS**: Selects the ABC layout, if the user has it enabled. Enabling a
+///   layout the user never added would put a keyboard in their input menu they
+///   did not ask for, so this stays within what they already have.
 /// - **Other platforms**: Does nothing (no-op)
+///
+/// Failure is silent: if there is no window to act on, or the switch is
+/// refused, nothing happens and nothing is raised. 2.x reported these as a
+/// `PlatformException`.
 ///
 /// ## Example
 /// ```dart
@@ -36,14 +42,18 @@ Future<void> setEnglishKeyboard() async {
 /// Use this to verify the keyboard state before accepting input
 /// or to display a warning to the user.
 ///
-/// ## Platform Support
-/// - **Windows**: Checks IME conversion mode via IMM32 API
-/// - **macOS**: Checks if current input source is ABC or US keyboard
-/// - **Other platforms**: Always returns `false`
+/// **This means something different on each platform**, and always has:
+/// - **Windows**: the IME is not in native-language conversion mode. A Korean
+///   keyboard in alphanumeric mode answers `true`.
+/// - **macOS**: the selected layout types English. Asked of the layout itself,
+///   so Dvorak, Colemak, British, Australian and Canadian all answer `true` —
+///   2.x recognised only ABC and US and answered `false` for the rest.
+/// - **Other platforms**: always `false`
 ///
 /// ## Returns
 /// - `true` if the current keyboard is in English mode
-/// - `false` if non-English (e.g., Korean, Japanese) or unsupported platform
+/// - `false` if non-English (e.g., Korean, Japanese), if the state cannot be
+///   read, or on an unsupported platform
 ///
 /// ## Example
 /// ```dart
@@ -68,8 +78,11 @@ Future<bool> isEnglishKeyboard() async {
 /// Save it as-is and later restore it with [setInputSource].
 ///
 /// **Treat the value as opaque**: it is platform-specific and its format is an
-/// implementation detail. Do not parse, compare, or construct it yourself — all
-/// interpretation happens natively. The examples below are illustrative only.
+/// implementation detail. Do not parse, compare, or construct it yourself. The
+/// examples below are illustrative only.
+///
+/// The format is unchanged from 2.x, so a token your app saved before
+/// upgrading still restores afterwards.
 ///
 /// ## Platform Support
 /// - **macOS**: Returns input source ID (e.g., "com.apple.keylayout.ABC",
@@ -107,12 +120,22 @@ Future<String?> getCurrentInputSource() async {
 ///
 /// Use this to restore a token previously saved from [getCurrentInputSource].
 /// Pass the saved token back unchanged — do not construct or modify it. The
-/// token is platform-specific and is parsed only natively.
+/// token's format is platform-specific and may change between releases.
 ///
 /// ## Platform Support
-/// - **macOS**: Sets the input source using Carbon Text Input Source Services API
-/// - **Windows**: Sets keyboard layout and IME conversion mode
+/// - **Windows**: Loads the keyboard layout and restores the IME conversion
+///   mode the token carried
+/// - **macOS**: Selects the input source, **enabling it first if the user has
+///   it installed but not enabled**. That adds a keyboard to their input menu
+///   and persists after your app exits. It is what makes restoring reliable —
+///   the source was theirs to begin with — but pass only tokens that came from
+///   [getCurrentInputSource], never ones a user or a server supplied.
 /// - **Other platforms**: Does nothing (no-op)
+///
+/// Failure is silent: a malformed token, or a layout that no longer exists on
+/// the machine, does nothing and raises nothing. Tokens come back from your own
+/// storage and can go stale, so a failed restore is expected rather than
+/// exceptional. 2.x reported these as a `PlatformException`.
 ///
 /// ## Parameters
 /// - [sourceId]: The input source ID to activate
@@ -145,19 +168,35 @@ Future<void> setInputSource(String sourceId) async {
   await FlutterImePlatform.instance.setInputSource(sourceId);
 }
 
-/// Disables IME completely, preventing non-English input.
+/// Detaches the IME from the app window, so composition cannot start.
 ///
-/// Unlike [setEnglishKeyboard], this completely blocks IME functionality,
-/// making it impossible for users to type in non-English characters
-/// even if they try to switch keyboard layouts.
+/// Stronger than [setEnglishKeyboard], which only changes the current mode and
+/// leaves the user free to change it back. With the IME context detached there
+/// is nothing to compose with, so switching to a Korean or Japanese keyboard
+/// and typing produces nothing.
 ///
-/// **Important**: Always call [enableIME] when the text field loses focus
-/// to restore normal IME functionality.
+/// **It does not prevent pasted or programmatically injected text.** Nothing
+/// here touches the clipboard: paste never travels the keyboard path, so
+/// `Ctrl+V` puts Korean into the field whatever this call did. The same was
+/// true in 2.x — that version's documentation claimed non-English input was
+/// "impossible", which it never was. If you need a guarantee about the *value*
+/// of a field rather than about typing, filter it in Dart with an
+/// `inputFormatter`; that catches paste too.
+///
+/// **Important**: Always call [enableIME] when the text field loses focus,
+/// or the IME stays detached for the rest of the app's life.
 ///
 /// ## Platform Support
-/// - **Windows only**: Blocks IME messages via WndProc hook and detaches IME context
-/// - **macOS**: Not supported (use [setEnglishKeyboard] + [onInputSourceChanged] instead)
+/// - **Windows only**: Detaches the window's IME context
+/// - **macOS**: Not supported (use [setEnglishKeyboard] + [onInputSourceChanged]
+///   instead)
 /// - **Other platforms**: Does nothing (no-op)
+///
+/// Failure is silent, and there is one case worth knowing: if the package
+/// cannot positively identify a window belonging to this process, it refuses
+/// rather than guessing. Detaching an IME context is not undone by anything
+/// except [enableIME], so acting on a window that turned out to be another
+/// application's would disable the IME where the user is actually typing.
 ///
 /// ## Example
 /// ```dart
@@ -186,7 +225,7 @@ Future<void> disableIME() async {
 /// to type in non-English characters.
 ///
 /// ## Platform Support
-/// - **Windows only**: Restores IME context and stops blocking IME messages
+/// - **Windows only**: Restores the window's default IME context
 /// - **Other platforms**: Does nothing (no-op)
 ///
 /// ## Example
@@ -212,10 +251,26 @@ Future<void> enableIME() async {
 /// This allows you to react to user's keyboard switching in real-time.
 /// Useful for enforcing English-only input by reverting changes.
 ///
+/// **Emits only on a change, and not the value you started from.** Subscribing
+/// captures the current state as a baseline and stays silent until it moves;
+/// use [isEnglishKeyboard] for the value right now. Two switches that land on
+/// the same answer — Korean to Japanese, say — emit once, not twice. 2.x
+/// emitted on every keyboard-change message, including repeats.
+///
+/// [disableIME] and [enableIME] do not emit. While the IME context is detached
+/// the state is unreadable rather than non-English, and announcing a switch
+/// that never happened would fight the "force English" recipe below.
+///
 /// ## Platform Support
-/// - **Windows**: Monitors `WM_INPUTLANGCHANGE` and `WM_IME_NOTIFY` messages
-/// - **macOS**: Monitors `kTISNotifySelectedKeyboardInputSourceChanged` notification
+/// - **Windows**: polled a few times a second. There is no callback the OS can
+///   hand a Dart isolate that also returns a value synchronously, which is what
+///   a window procedure needs, so polling is the honest option.
+/// - **macOS**: pushed, from the system notification. A notification callback
+///   returns nothing, so there is no such constraint.
 /// - **Other platforms**: Returns an empty stream
+///
+/// Nothing is polled or observed until you listen, and it stops again when the
+/// last listener cancels.
 ///
 /// ## Emits
 /// - `true` when switched to English keyboard
@@ -257,8 +312,10 @@ Stream<bool> onInputSourceChanged() {
 /// which might cause unintended uppercase input.
 ///
 /// ## Platform Support
-/// - **Windows**: Uses `GetKeyState(VK_CAPITAL)` API
-/// - **macOS**: Uses `NSEvent.modifierFlags`
+/// - **Windows**: reads the Caps Lock toggle state
+/// - **macOS**: reads hardware modifier state, which needs no Accessibility
+///   permission. 2.x used an event monitor that silently delivered nothing
+///   unless the user had granted one.
 /// - **Other platforms**: Always returns `false`
 ///
 /// ## Returns
@@ -285,9 +342,20 @@ Future<bool> isCapsLockOn() async {
 ///
 /// Use this to show or hide a Caps Lock warning indicator in real-time.
 ///
+/// Like [onInputSourceChanged], this emits only on a change and not the state
+/// you started from — use [isCapsLockOn] for that — and nothing is polled until
+/// you listen.
+///
+/// **On macOS a language switch can report a Caps Lock toggle.** The Caps Lock
+/// key doubles as the input-source switch there, so changing language really
+/// does turn the lock on and off again, for about twelve milliseconds. This
+/// reports it because it happened. If you drive a warning indicator from this
+/// stream, expect it to flicker when the user switches language; there is no
+/// state that distinguishes the two cases, only duration.
+///
 /// ## Platform Support
-/// - **Windows**: Monitors `WM_KEYDOWN`/`WM_KEYUP` for `VK_CAPITAL`
-/// - **macOS**: Monitors `NSEvent.flagsChanged` for `.capsLock`
+/// - **Windows**: polled a few times a second
+/// - **macOS**: polled a few times a second
 /// - **Other platforms**: Returns an empty stream
 ///
 /// ## Emits
