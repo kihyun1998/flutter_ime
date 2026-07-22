@@ -45,9 +45,10 @@ upgrade by changing the version constraint.
   doubles as the input-source switch there, so changing language really does
   toggle the lock for about twelve milliseconds and a polled stream sometimes
   catches it. There is no state that distinguishes the two cases, only duration.
-* Only one instance can observe input-source changes per process. A second one
-  that subscribes while another still holds the observer throws a `StateError`
-  rather than silently killing the first listener.
+* macOS only: only one instance can observe input-source changes per process.
+  A second one that subscribes while another still holds the observer throws a
+  `StateError` rather than silently killing the first listener. (Windows has no
+  such limit — it polls, with nothing process-global to contend over.)
 
 ### Documentation
 
