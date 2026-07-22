@@ -11,9 +11,13 @@ topics:
   - macos
 
 environment:
-  # 3.1.0 for NativeCallable, which is how the macOS input-source notification
-  # observer is bridged. Nothing else in the package needs it.
-  sdk: ">=3.1.0 <4.0.0"
+  # 3.1.0 brought NativeCallable, which is how the macOS input-source
+  # notification observer is bridged; 3.4.0 brought its `keepIsolateAlive`
+  # setter, which that observer needs. It is never closed — closing it races
+  # with deliveries already queued — and a listener callable that is never
+  # closed would otherwise hold the isolate open forever, so a plain Dart CLI
+  # using this package could not exit. Nothing else in the package needs 3.4.
+  sdk: ">=3.4.0 <4.0.0"
   flutter: ">=3.3.0"
 
 dependencies:

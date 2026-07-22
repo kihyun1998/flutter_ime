@@ -28,7 +28,22 @@ class MacosIme {
     CoreGraphics? coreGraphics,
   })  : _cf = coreFoundation ?? CoreFoundation.instance,
         _tis = textInputSources ?? TextInputSources.instance,
-        _cg = coreGraphics ?? CoreGraphics.instance;
+        _cg = coreGraphics ?? CoreGraphics.instance {
+    // Clear an observer registration left behind by a previous isolate, at the
+    // earliest moment this package gets to run any code at all.
+    //
+    // A constructor with a side effect on process-global state needs
+    // justifying. The justification is timing: after a hot restart the stale
+    // registration is already a live landmine, and waiting until something
+    // subscribes leaves it armed for as long as the app happens not to. A
+    // consumer who installs this in `main()` — the usual shape — is safe from
+    // the next keyboard switch onwards instead.
+    //
+    // Nothing legitimate is ever removed. Anything filed under our token was
+    // filed by this package, and a live one belongs to an instance in this
+    // isolate, which would have to be a second instance nobody asked for.
+    _removeObserver();
+  }
 
   final CoreFoundation _cf;
   final TextInputSources _tis;
@@ -137,13 +152,62 @@ class MacosIme {
       (source) => '${_readSourceId(source) ?? '(no id)'}  '
           'languages: ${_readLanguages(source)}');
 
-  /// The live registration with the distributed notification centre, or null
-  /// while nothing is listening.
+  /// The one native callable this instance ever creates, made on first use and
+  /// **never closed**.
   ///
-  /// Holding the callable is not optional bookkeeping. A `NativeCallable` keeps
-  /// its isolate alive until closed, so dropping this reference without
-  /// closing it leaks the callable *and* pins the isolate.
-  NativeCallable<CFNotificationCallbackNative>? _inputSourceObserver;
+  /// Closing it on cancel is the obvious design and it is unsafe. Delivery is
+  /// asynchronous — the notification centre enqueues a block holding this
+  /// address on the main dispatch queue — and `CFNotificationCenterRemoveObserver`
+  /// only stops deliveries that have not been enqueued yet. A block already in
+  /// the queue when the last listener cancels would run after the close and
+  /// call into freed memory, which is the same
+  /// `Callback invoked after it has been deleted` crash hot restart produces,
+  /// except that this one happens in release builds. Cancelling on focus loss
+  /// while the user is mid-keyboard-switch is not an exotic sequence — it is
+  /// what the "force English" recipe does.
+  ///
+  /// So the callable outlives every subscription and [_onChanged] is what gets
+  /// nulled. A late delivery then reaches a live callable that does nothing.
+  ///
+  /// `keepIsolateAlive` tracks the registration rather than the callable.
+  /// While an observer is registered the isolate must not exit, because an
+  /// isolate that dies leaves exactly the orphaned registration described on
+  /// [_observerToken]. While nothing is registered it must be free to exit, or
+  /// a plain Dart CLI using this package could never terminate. The Windows
+  /// poller has the same property for free: its `Timer.periodic` keeps the
+  /// isolate alive for exactly as long as it is polling.
+  NativeCallable<CFNotificationCallbackNative>? _callable;
+
+  /// Where deliveries go while something is listening, and null otherwise.
+  ///
+  /// Doubles as the "is it started" flag: it is set exactly while a
+  /// registration is live.
+  void Function()? _onChanged;
+
+  /// The token this package's observer registration is filed under.
+  ///
+  /// **Deliberately an address that every isolate in the process computes the
+  /// same way**, rather than the callable's own address, and this is load
+  /// bearing rather than tidy.
+  ///
+  /// A registration lives in the notification centre, which belongs to the
+  /// process. A `NativeCallable` belongs to its isolate. Hot restart destroys
+  /// the isolate — and with it the callable — while leaving the registration
+  /// pointing at a trampoline that no longer exists, and no Dart code runs on
+  /// the way out to unregister it. The next keyboard switch then calls into
+  /// freed memory and takes the whole app down with
+  /// `Callback invoked after it has been deleted`.
+  ///
+  /// The fresh isolate cannot know the dead one's callable address, so with a
+  /// per-callable token the wreckage is unreachable. With a token both isolates
+  /// can compute, the fresh one can and does clear it — see
+  /// [startInputSourceNotifications].
+  ///
+  /// The consequence to accept: at most one such registration exists per
+  /// process, so two instances of this class cannot both observe. That is the
+  /// same property that makes the cleanup possible, and one observer per
+  /// process is what this package wants anyway.
+  CFRef get _observerToken => _tis.notifySelectedKeyboardInputSourceChanged;
 
   /// Starts telling [onChanged] that the keyboard may have moved.
   ///
@@ -162,64 +226,62 @@ class MacosIme {
   /// Does nothing if already started, so the caller cannot register two
   /// observers for one stream.
   void startInputSourceNotifications(void Function() onChanged) {
-    if (_inputSourceObserver != null) return;
+    if (_onChanged != null) return;
+    _onChanged = onChanged;
 
     // A listener callable, not an isolate-local one: the notification arrives
     // on whichever thread the run loop delivers it on, and only the listener
     // kind may be invoked from a thread that is not the isolate's.
-    final callable = NativeCallable<CFNotificationCallbackNative>.listener(
-      (CFRef _, CFRef __, CFRef ___, CFRef ____, CFRef _____) => onChanged(),
+    final callable =
+        _callable ??= NativeCallable<CFNotificationCallbackNative>.listener(
+      (CFRef _, CFRef __, CFRef ___, CFRef ____, CFRef _____) =>
+          _onChanged?.call(),
     );
+    callable.keepIsolateAlive = true;
 
-    // Register before storing. A failed registration must leave nothing
-    // behind: an unclosed callable pins the isolate alive for the rest of the
-    // process, and storing it first would hand back a handle to an observer
-    // that was never registered.
+    // Clear anything filed under our token before adding. Normally there is
+    // nothing to clear; after a hot restart there is a registration pointing
+    // at the previous isolate's deleted callable, and this is the only chance
+    // anyone gets to remove it. Removing a registration that does not exist is
+    // a no-op, so this costs one call.
+    _removeObserver();
+
     try {
       _cf.notificationCenterAddObserver(
         _cf.notificationCenterGetDistributedCenter(),
-        // The observer token is compared by pointer identity when removing and
-        // never dereferenced, so the callable's own address serves — unique per
-        // registration and alive for exactly as long as the registration is.
-        callable.nativeFunction.cast(),
+        _observerToken,
         callable.nativeFunction,
         _tis.notifySelectedKeyboardInputSourceChanged,
         nullptr,
         cfNotificationSuspensionBehaviorDeliverImmediately,
       );
     } catch (_) {
-      callable.close();
+      _onChanged = null;
+      callable.keepIsolateAlive = false;
       rethrow;
     }
-    _inputSourceObserver = callable;
   }
 
-  /// Unregisters the observer and closes the callable. Safe to call when
-  /// nothing was started.
+  /// Unregisters the observer. Safe to call when nothing was started.
   ///
-  /// Order matters: remove first, then close. Closing a callable that the
-  /// notification centre could still invoke would be a call through freed
-  /// memory.
+  /// The callable is deliberately left alive — see [_callable]. Disarming it
+  /// first and unregistering second means a delivery already in flight finds
+  /// nothing to call rather than something freed.
   void stopInputSourceNotifications() {
-    final callable = _inputSourceObserver;
-    if (callable == null) return;
-    _inputSourceObserver = null;
+    if (_onChanged == null) return;
+    _onChanged = null;
+    _removeObserver();
+    // Being registered is what pins the isolate, not the callable existing.
+    _callable?.keepIsolateAlive = false;
+  }
 
-    // The close has to happen even if the removal throws, or the handle is
-    // gone and the callable can never be closed by anyone. Closing a callable
-    // the centre might still invoke is the worse of the two failures, which is
-    // why the removal goes first and only its *failure* is tolerated.
-    try {
-      _cf.notificationCenterRemoveObserver(
+  /// Removes whatever is filed under [_observerToken]. A no-op when nothing is.
+  void _removeObserver() => _cf.notificationCenterRemoveObserver(
         _cf.notificationCenterGetDistributedCenter(),
-        callable.nativeFunction.cast(),
+        _observerToken,
         _tis.notifySelectedKeyboardInputSourceChanged,
         nullptr,
       );
-    } finally {
-      callable.close();
-    }
-  }
 
   /// Runs [body] against the selected keyboard input source, releasing it on
   /// every exit path. Returns null when there is no current input source to
