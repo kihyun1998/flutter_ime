@@ -18,6 +18,7 @@ import 'dart:ffi';
 // stub — which cannot name `WindowsIme`, since naming it would drag `dart:ffi`
 // into the web build. This test is VM-only anyway, having just imported it.
 import 'package:flutter_ime/src/ffi/ffi_flutter_ime.dart';
+import 'package:flutter_ime/src/ffi/ffi_flutter_ime_stub.dart' as stub;
 import 'package:flutter_ime/src/ffi/win32.dart';
 import 'package:flutter_ime/src/ffi/window_resolver.dart';
 import 'package:flutter_ime/src/ffi/windows_ime.dart';
@@ -57,44 +58,38 @@ void main() {
 
   tearDown(() => fallback.dispose());
 
-  group('operations not ported yet fall through to the native plugin', () {
-    test('isCapsLockOn returns the fallback result', () async {
-      fallback.capsLockResult = true;
-
-      expect(await ffi.isCapsLockOn(), isTrue);
-      expect(fallback.calls, contains('isCapsLockOn'));
+  group('every Windows operation now reaches FFI, not the native plugin', () {
+    // Sending a ported operation to the native plugin as well would mean doing
+    // the work twice, or doing it through the layer this migration exists to
+    // remove. With #15 the Windows set is complete, so nothing here may
+    // delegate.
+    test('isCapsLockOn', () async {
+      await ffi.isCapsLockOn();
+      expect(fallback.calls, isEmpty);
     });
 
-    test('onInputSourceChanged forwards the fallback stream', () async {
-      final events = <bool>[];
-      final subscription = ffi.onInputSourceChanged.listen(events.add);
+    test('onInputSourceChanged', () async {
+      final subscription = ffi.onInputSourceChanged.listen((_) {});
       addTearDown(subscription.cancel);
 
-      fallback.inputSourceController.add(true);
-      await Future<void>.delayed(Duration.zero);
-
-      expect(fallback.calls, contains('onInputSourceChanged'));
-      expect(events, [true]);
+      expect(fallback.calls, isEmpty);
     });
 
-    test('onCapsLockChanged forwards the fallback stream', () async {
+    test('onCapsLockChanged', () async {
+      final subscription = ffi.onCapsLockChanged.listen((_) {});
+      addTearDown(subscription.cancel);
+
+      expect(fallback.calls, isEmpty);
+    });
+
+    test('the streams stay silent while the value never changes', () async {
       final events = <bool>[];
       final subscription = ffi.onCapsLockChanged.listen(events.add);
       addTearDown(subscription.cancel);
 
-      fallback.capsLockController.add(true);
-      await Future<void>.delayed(Duration.zero);
+      await Future<void>.delayed(const Duration(milliseconds: 200));
 
-      expect(fallback.calls, contains('onCapsLockChanged'));
-      expect(events, [true]);
-    });
-
-    test('reaching an unported operation never throws', () async {
-      // The shape of the original crash: whoever holds the instance, an
-      // unported operation must not raise.
-      await expectLater(ffi.isCapsLockOn(), completes);
-      expect(() => ffi.onInputSourceChanged, returnsNormally);
-      expect(() => ffi.onCapsLockChanged, returnsNormally);
+      expect(events, isEmpty);
     });
   });
 
@@ -171,6 +166,54 @@ void main() {
     });
   });
 
+  group('where there is no FFI implementation, everything falls through', () {
+    // The web stub is the shipping form of "this platform has no FFI backend",
+    // and it is also the shape macOS is in until its own tickets land. The
+    // fall-through is what makes a half-ported instance safe to install at any
+    // moment — an earlier version threw instead, and crashed the example app on
+    // a page transition.
+    late MockFlutterImePlatform stubFallback;
+    late stub.FfiFlutterIme stubbed;
+
+    setUp(() {
+      stubFallback = MockFlutterImePlatform();
+      stubbed = stub.FfiFlutterIme(fallback: stubFallback);
+    });
+
+    tearDown(() => stubFallback.dispose());
+
+    test('every operation reaches the native plugin', () async {
+      await stubbed.setEnglishKeyboard();
+      await stubbed.isEnglishKeyboard();
+      await stubbed.getCurrentInputSource();
+      await stubbed.setInputSource('00000412:1:0');
+      await stubbed.disableIME();
+      await stubbed.enableIME();
+      await stubbed.isCapsLockOn();
+      stubbed.onInputSourceChanged.listen((_) {}).cancel();
+      stubbed.onCapsLockChanged.listen((_) {}).cancel();
+
+      expect(
+          stubFallback.calls,
+          containsAll(<String>[
+            'setEnglishKeyboard',
+            'isEnglishKeyboard',
+            'getCurrentInputSource',
+            'setInputSource',
+            'disableIME',
+            'enableIME',
+            'isCapsLockOn',
+            'onInputSourceChanged',
+            'onCapsLockChanged',
+          ]));
+    });
+
+    test('no operation throws', () async {
+      await expectLater(stubbed.disableIME(), completes);
+      expect(() => stubbed.onInputSourceChanged, returnsNormally);
+    });
+  });
+
   group('an unresolvable window degrades rather than failing', () {
     // Ticket #12 requires the no-window case to be a documented no-op instead
     // of an error. Every ported operation has to hold that line.
@@ -181,6 +224,7 @@ void main() {
       await expectLater(ffi.setInputSource('00000412:1:0'), completes);
       await expectLater(ffi.disableIME(), completes);
       await expectLater(ffi.enableIME(), completes);
+      await expectLater(ffi.isCapsLockOn(), completes);
     });
   });
 }
