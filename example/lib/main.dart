@@ -779,6 +779,29 @@ class _FfiPageState extends State<FfiPage> {
     await _check();
   }
 
+  /// Fires the same calls three seconds later, so they can be made to land
+  /// while this window is NOT focused — click another app after pressing.
+  ///
+  /// Window *lookup* is focus-independent by construction (FindWindowEx matches
+  /// on class and process id). What this actually probes is whether IMM32 will
+  /// operate on a window that is not in the foreground, which cannot be
+  /// reasoned about from the outside.
+  Future<void> _setEnglishDelayed() async {
+    _append('--- scheduled: switch to another app now ---');
+    await Future<void>.delayed(const Duration(seconds: 3));
+    final resolved = _resolveAgain();
+    await setEnglishKeyboard();
+    final english = await isEnglishKeyboard();
+    _append('while unfocused: window=$resolved  isEnglish=$english');
+  }
+
+  String _resolveAgain() {
+    final instance = FlutterImePlatform.instance;
+    return instance is FfiFlutterIme
+        ? (instance.describeResolvedWindow() ?? '(none)')
+        : '(not the FFI instance)';
+  }
+
   @override
   Widget build(BuildContext context) {
     if (!_installed) {
@@ -855,6 +878,12 @@ class _FfiPageState extends State<FfiPage> {
               child: const Text('Clear'),
             ),
           ]),
+          const SizedBox(height: 12),
+          OutlinedButton.icon(
+            onPressed: _setEnglishDelayed,
+            icon: const Icon(Icons.timer_outlined),
+            label: const Text('Run in 3s (then click another app)'),
+          ),
           const SizedBox(height: 16),
           Container(
             width: double.infinity,
