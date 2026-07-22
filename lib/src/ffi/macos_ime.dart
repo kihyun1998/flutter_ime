@@ -15,6 +15,7 @@ library;
 import 'dart:ffi';
 
 import 'package:ffi/ffi.dart';
+import 'package:meta/meta.dart';
 
 import '../english_input_source.dart';
 import 'core_foundation.dart';
@@ -29,25 +30,45 @@ class MacosIme {
   })  : _cf = coreFoundation ?? CoreFoundation.instance,
         _tis = textInputSources ?? TextInputSources.instance,
         _cg = coreGraphics ?? CoreGraphics.instance {
-    // Clear an observer registration left behind by a previous isolate, at the
-    // earliest moment this package gets to run any code at all.
+    // Clear an observer registration left behind by a previous isolate, as
+    // early as this package gets to run any code.
     //
     // A constructor with a side effect on process-global state needs
     // justifying. The justification is timing: after a hot restart the stale
     // registration is already a live landmine, and waiting until something
-    // subscribes leaves it armed for as long as the app happens not to. A
-    // consumer who installs this in `main()` — the usual shape — is safe from
-    // the next keyboard switch onwards instead.
+    // subscribes leaves it armed for as long as the app happens not to.
+    // Construction happens on the first call into the package rather than at
+    // `main()` — [FlutterImePlatform.instance] is a lazy static — so this is
+    // not the earliest imaginable moment, but it is the earliest available one
+    // and it is well before any keyboard switch the app cares about.
     //
-    // Nothing legitimate is ever removed. Anything filed under our token was
-    // filed by this package, and a live one belongs to an instance in this
-    // isolate, which would have to be a second instance nobody asked for.
-    _removeObserver();
+    // Only when nothing in *this* isolate owns a registration. Otherwise a
+    // second instance would silently unregister a live first one, whose
+    // `_onChanged` would stay set — so its stream would look started, receive
+    // nothing ever again, and refuse to restart because
+    // [startInputSourceNotifications] short-circuits on exactly that field.
+    if (_observerOwner == null) _removeObserver();
   }
 
   final CoreFoundation _cf;
   final TextInputSources _tis;
   final CoreGraphics _cg;
+
+  /// The instance whose observer is currently registered, or null when none is.
+  ///
+  /// Process-global because the thing it tracks is: the notification centre
+  /// belongs to the process and the token is shared by design, so ownership
+  /// cannot be per-instance. It exists to tell "a registration left by a dead
+  /// isolate" — safe and necessary to clear — apart from "a registration a live
+  /// instance is using", which is not.
+  static MacosIme? _observerOwner;
+
+  /// Forgets which instance owns the observer.
+  ///
+  /// Only for tests, which build many instances in one process and would
+  /// otherwise inherit ownership from the previous test.
+  @visibleForTesting
+  static void debugResetObserverOwner() => _observerOwner = null;
 
   /// The layout [setEnglishKeyboard] switches to.
   ///
@@ -244,8 +265,23 @@ class MacosIme {
   ///
   /// Does nothing if already started, so the caller cannot register two
   /// observers for one stream.
+  /// Throws a [StateError] if another live instance already holds the
+  /// observer. One registration exists per process — that is what makes the
+  /// hot-restart cleanup possible — so a second instance cannot quietly take it
+  /// over: the first one's stream would go dead with nothing to say so. Cancel
+  /// the existing subscription before subscribing through a new instance.
   void startInputSourceNotifications(void Function() onChanged) {
     if (_onChanged != null) return;
+
+    final owner = _observerOwner;
+    if (owner != null && !identical(owner, this)) {
+      throw StateError(
+          'Another MacosIme already observes input-source changes. Only one '
+          'registration exists per process, so taking it over would leave the '
+          'first listener silently receiving nothing. Cancel the existing '
+          'subscription first.');
+    }
+
     _onChanged = onChanged;
 
     // A listener callable, not an isolate-local one: the notification arrives
@@ -279,6 +315,9 @@ class MacosIme {
       callable.keepIsolateAlive = false;
       rethrow;
     }
+
+    // After the add, not before: a failed registration owns nothing.
+    _observerOwner = this;
   }
 
   /// Unregisters the observer. Safe to call when nothing was started.
@@ -290,6 +329,7 @@ class MacosIme {
     if (_onChanged == null) return;
     _onChanged = null;
     _removeObserver();
+    if (identical(_observerOwner, this)) _observerOwner = null;
     // Being registered is what pins the isolate, not the callable existing.
     _callable?.keepIsolateAlive = false;
   }

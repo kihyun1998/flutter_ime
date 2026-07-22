@@ -93,6 +93,10 @@ void main() {
       );
 
   setUp(() {
+    // Ownership is process-global by necessity, so it outlives a test unless
+    // it is cleared. Without this, a test that starts notifications leaves the
+    // next test's constructor believing a live instance already owns one.
+    MacosIme.debugResetObserverOwner();
     cf = _FakeCoreFoundation();
     ime = build();
   });
@@ -213,6 +217,78 @@ void main() {
       expect(kinds().where((k) => k == 'add'), hasLength(10));
       expect(kinds().where((k) => k == 'remove'), hasLength(20),
           reason: 'each start clears first, then each stop unregisters');
+    });
+  });
+
+  group('a live registration is not collateral damage', () {
+    // The stale-registration cleanup runs from the constructor, and the
+    // registration is filed under a process-wide token. Without knowing whether
+    // anything live owns one, building a second instance would unregister the
+    // first — and the first would not notice: its `_onChanged` stays set, so
+    // its stream looks started, receives nothing ever again, and refuses to
+    // restart because starting short-circuits on exactly that field. Silent and
+    // unrecoverable, which is the worst shape a bug can take.
+    test('constructing a second instance leaves a live registration alone', () {
+      ime.startInputSourceNotifications(() {});
+      cf.calls.clear();
+
+      build();
+
+      expect(cf.calls, isEmpty,
+          reason: 'the live registration must survive a second construction');
+    });
+
+    test('constructing a second instance still clears a stale registration',
+        () {
+      // Nothing live owns one here, so the hot-restart cleanup must still run.
+      cf.calls.clear();
+
+      build();
+
+      expect(kinds(), ['remove']);
+    });
+
+    test('a second instance refuses to take the observer over', () {
+      ime.startInputSourceNotifications(() {});
+      final second = build();
+
+      expect(() => second.startInputSourceNotifications(() {}),
+          throwsA(isA<StateError>()),
+          reason: 'taking over silently would kill the first listener');
+    });
+
+    test('the refusal registers nothing', () {
+      ime.startInputSourceNotifications(() {});
+      final second = build();
+      cf.calls.clear();
+
+      try {
+        second.startInputSourceNotifications(() {});
+      } on StateError {
+        // expected
+      }
+
+      expect(cf.calls, isEmpty);
+    });
+
+    test('a second instance may observe once the first has stopped', () {
+      ime.startInputSourceNotifications(() {});
+      ime.stopInputSourceNotifications();
+      final second = build();
+      cf.calls.clear();
+
+      expect(
+          () => second.startInputSourceNotifications(() {}), returnsNormally);
+      expect(kinds(), ['remove', 'add']);
+    });
+
+    test('the same instance may restart after stopping', () {
+      ime.startInputSourceNotifications(() {});
+      ime.stopInputSourceNotifications();
+      cf.calls.clear();
+
+      expect(() => ime.startInputSourceNotifications(() {}), returnsNormally);
+      expect(kinds(), ['remove', 'add']);
     });
   });
 }
