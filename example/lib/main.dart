@@ -748,6 +748,9 @@ class _FfiPageState extends State<FfiPage> {
   /// The token from the last save, awaiting a restore.
   String? _saved;
 
+  String _comparison = '(not compared yet)';
+  bool? _comparisonOk;
+
   @override
   void initState() {
     super.initState();
@@ -814,6 +817,25 @@ class _FfiPageState extends State<FfiPage> {
     await setEnglishKeyboard();
     final english = await isEnglishKeyboard();
     _append('while unfocused: window=$resolved  isEnglish=$english');
+  }
+
+  /// Reads the token through BOTH implementations back to back and reports
+  /// whether they agree.
+  ///
+  /// The token format is a hard compatibility requirement — consumers persist
+  /// these, so one written by 2.x must still restore after upgrading. `_previous`
+  /// is the method-channel implementation this page displaced on entry, so both
+  /// reads see the same keyboard state a moment apart.
+  Future<void> _compareWithNative() async {
+    final ffiToken = await getCurrentInputSource();
+    final nativeToken = await _previous?.getCurrentInputSource();
+    final match = ffiToken == nativeToken;
+    setState(() {
+      _comparison = '${match ? "MATCH" : "MISMATCH"}\n'
+          '  ffi:    $ffiToken\n'
+          '  native: $nativeToken';
+      _comparisonOk = match;
+    });
   }
 
   Future<void> _save() async {
@@ -922,6 +944,43 @@ class _FfiPageState extends State<FfiPage> {
               child: const Text('Clear'),
             ),
           ]),
+          const SizedBox(height: 24),
+          Text('2.x compatibility',
+              style: Theme.of(context).textTheme.titleMedium),
+          const SizedBox(height: 4),
+          const Text(
+            'Reads the token through the FFI implementation and through the '
+            'native plugin back to back. They must agree: consumers persist '
+            'these tokens, so one saved under 2.x has to restore under 3.x.',
+          ),
+          const SizedBox(height: 8),
+          FilledButton.icon(
+            onPressed: _compareWithNative,
+            icon: const Icon(Icons.compare_arrows),
+            label: const Text('Compare FFI token vs native token'),
+          ),
+          const SizedBox(height: 8),
+          Container(
+            width: double.infinity,
+            padding: const EdgeInsets.all(16),
+            decoration: BoxDecoration(
+              color: _comparisonOk == null
+                  ? Colors.grey[200]
+                  : (_comparisonOk! ? Colors.green[50] : Colors.red[50]),
+              borderRadius: BorderRadius.circular(8),
+            ),
+            child: SelectableText(
+              _comparison,
+              style: TextStyle(
+                fontFamily: 'monospace',
+                fontSize: 13,
+                fontWeight: FontWeight.bold,
+                color: _comparisonOk == null
+                    ? Colors.grey[800]
+                    : (_comparisonOk! ? Colors.green[900] : Colors.red[900]),
+              ),
+            ),
+          ),
           const SizedBox(height: 24),
           Text('Save and restore',
               style: Theme.of(context).textTheme.titleMedium),
