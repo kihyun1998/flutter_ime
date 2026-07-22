@@ -30,14 +30,19 @@ class WindowsIme {
   /// it walks the process's top-level windows. Do not call it from a `build`.
   ResolvedWindow resolveWindow() => _resolver.resolve();
 
-  /// Runs [body] against the window's IME context, releasing the context on
-  /// every exit path.
+  /// Runs [body] against [window]'s IME context, releasing the context on every
+  /// exit path.
   ///
-  /// Returns null when there is no window to target or the window has no IME
-  /// context. A detached context is the normal state while the IME is
-  /// disabled, so null here means "nothing to do", not "something broke".
-  T? _withImeContext<T>(T Function(Handle32 context) body) {
-    final window = _resolver.resolve();
+  /// Takes an already-resolved window rather than resolving one itself, so a
+  /// single operation always targets a single window. Resolving twice within
+  /// one call would let the answer change in between — the layout could be read
+  /// from one window and the conversion state from another.
+  ///
+  /// Returns null when the window has no IME context. A detached context is the
+  /// normal state while the IME is disabled, so null means "nothing to do", not
+  /// "something broke".
+  T? _withImeContext<T>(
+      ResolvedWindow window, T Function(Handle32 context) body) {
     if (!window.isUsable) return null;
 
     final context = _win32.immGetContext(window.handle);
@@ -49,23 +54,53 @@ class WindowsIme {
     }
   }
 
+  /// Reads the IME conversion and sentence modes, or null if unavailable.
+  ({int conversion, int sentence})? _readConversionStatus(Handle32 context) {
+    // One allocation for both out-parameters. Two separate allocations would
+    // leave a window where the second one throwing leaks the first.
+    final out = calloc<Uint32>(2);
+    try {
+      if (_win32.immGetConversionStatus(context, out, out + 1) == 0) {
+        return null;
+      }
+      return (conversion: out.value, sentence: (out + 1).value);
+    } finally {
+      calloc.free(out);
+    }
+  }
+
   /// Switches the IME to alphanumeric conversion mode.
   ///
   /// Returns false when the switch could not be performed, including when
   /// there is no resolvable window or no IME context.
-  bool setEnglishKeyboard() =>
-      _withImeContext((context) =>
-          _win32.immSetConversionStatus(
-              context, imeCmodeAlphanumeric, imeSmodeNone) !=
-          0) ??
-      false;
+  bool setEnglishKeyboard() {
+    final window = _resolver.resolve();
+    return _withImeContext(
+            window,
+            (context) =>
+                _win32.immSetConversionStatus(
+                    context, imeCmodeAlphanumeric, imeSmodeNone) !=
+                0) ??
+        false;
+  }
+
+  /// Whether the IME is currently in English (non-native) conversion mode.
+  ///
+  /// Returns false when there is no window or no IME context, matching the
+  /// native plugin's behaviour.
+  bool isEnglishKeyboard() {
+    final window = _resolver.resolve();
+    final status = _withImeContext(window, _readConversionStatus);
+    if (status == null) return false;
+    return isEnglishConversionMode(status.conversion);
+  }
 
   /// Reads the current keyboard layout and IME conversion state as an opaque
   /// token, or null if the layout could not be read.
   ///
-  /// Mirrors the native plugin exactly, including its two degraded paths: a
-  /// failed layout read yields null, and a window with no IME context yields a
-  /// layout-only token rather than nothing.
+  /// Degraded paths mirror the native plugin: a failed layout read yields null,
+  /// and a window with no IME context yields a layout-only token, which still
+  /// round-trips through [setInputSource].
   String? getCurrentInputSource() {
     final window = _resolver.resolve();
     if (!window.isUsable) return null;
@@ -73,21 +108,21 @@ class WindowsIme {
     final klid = _readKeyboardLayoutName();
     if (klid == null) return null;
 
-    final conversion = _withImeContext((context) {
-      final out = calloc<Uint32>(2);
-      try {
-        if (_win32.immGetConversionStatus(context, out, out + 1) == 0) {
-          return null;
-        }
-        return formatInputSourceToken(klid, out.value, (out + 1).value);
-      } finally {
-        calloc.free(out);
-      }
-    });
-
-    // No IME context, or the status read failed: the layout alone is still
-    // worth handing back, and it round-trips through setInputSource.
-    return conversion ?? klid;
+    final context = _win32.immGetContext(window.handle);
+    if (context == nullptr) return klid;
+    try {
+      // The native plugin ignores whether the status read succeeded and formats
+      // the out-parameters regardless, so a failed read yields ":0:0" rather
+      // than a layout-only token. Matched deliberately: the two tokens restore
+      // differently — one forces alphanumeric mode, the other leaves the
+      // conversion state alone — and this must produce the same token 2.x did
+      // for the same keyboard state.
+      final status =
+          _readConversionStatus(context) ?? (conversion: 0, sentence: 0);
+      return formatInputSourceToken(klid, status.conversion, status.sentence);
+    } finally {
+      _win32.immReleaseContext(window.handle, context);
+    }
   }
 
   /// Restores a keyboard layout, and the IME conversion state if the token
@@ -112,8 +147,10 @@ class WindowsIme {
     }
 
     if (token.hasConversion) {
-      _withImeContext((context) => _win32.immSetConversionStatus(
-          context, token.conversion!, token.sentence!));
+      _withImeContext(
+          window,
+          (context) => _win32.immSetConversionStatus(
+              context, token.conversion!, token.sentence!));
     }
     // The layout switched, which is the part that always applies. Conversion
     // state is best-effort: a window with no IME context has none to restore.
@@ -130,24 +167,4 @@ class WindowsIme {
       calloc.free(buffer);
     }
   }
-
-  /// Whether the IME is currently in English (non-native) conversion mode.
-  ///
-  /// Returns false when there is no window or no IME context, matching the
-  /// native plugin's behaviour.
-  bool isEnglishKeyboard() =>
-      _withImeContext((context) {
-        // One allocation for both out-parameters. Two separate allocations
-        // would leave a window where the second one throwing leaks the first.
-        final out = calloc<Uint32>(2);
-        try {
-          if (_win32.immGetConversionStatus(context, out, out + 1) == 0) {
-            return false;
-          }
-          return isEnglishConversionMode(out.value);
-        } finally {
-          calloc.free(out);
-        }
-      }) ??
-      false;
 }
