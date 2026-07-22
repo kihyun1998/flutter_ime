@@ -751,6 +751,17 @@ class _FfiPageState extends State<FfiPage> {
   String _comparison = '(not compared yet)';
   bool? _comparisonOk;
 
+  /// Guarded by disableIME() while focused.
+  final _guardedController = TextEditingController();
+  final _guardedFocus = FocusNode();
+
+  /// Never guarded. If Korean cannot be typed here either, a "no Hangul"
+  /// result in the guarded field proves nothing — the IME simply was not
+  /// running.
+  final _controlController = TextEditingController();
+
+  int _cycles = 0;
+
   @override
   void initState() {
     super.initState();
@@ -777,6 +788,9 @@ class _FfiPageState extends State<FfiPage> {
   @override
   void dispose() {
     _restorePlatform();
+    _guardedController.dispose();
+    _guardedFocus.dispose();
+    _controlController.dispose();
     super.dispose();
   }
 
@@ -810,6 +824,43 @@ class _FfiPageState extends State<FfiPage> {
   /// on class and process id). What this actually probes is whether IMM32 will
   /// operate on a window that is not in the foreground, which cannot be
   /// reasoned about from the outside.
+  Widget _hangulReadout(String label, String text, {required bool wantHangul}) {
+    final has = _containsHangul(text);
+    final ok = has == wantHangul;
+    return Container(
+      width: double.infinity,
+      margin: const EdgeInsets.only(top: 8),
+      padding: const EdgeInsets.all(12),
+      decoration: BoxDecoration(
+        color: text.isEmpty
+            ? Colors.grey[200]
+            : (ok ? Colors.green[50] : Colors.red[50]),
+        borderRadius: BorderRadius.circular(8),
+      ),
+      child: Column(
+        crossAxisAlignment: CrossAxisAlignment.start,
+        children: [
+          Text(
+            text.isEmpty
+                ? '$label: (nothing typed)'
+                : (ok ? '$label: OK' : '$label: UNEXPECTED'),
+            style: TextStyle(
+              fontWeight: FontWeight.bold,
+              color: text.isEmpty
+                  ? Colors.grey[800]
+                  : (ok ? Colors.green[900] : Colors.red[900]),
+            ),
+          ),
+          const SizedBox(height: 4),
+          SelectableText(
+            _runesOf(text),
+            style: const TextStyle(fontFamily: 'monospace', fontSize: 11),
+          ),
+        ],
+      ),
+    );
+  }
+
   Future<void> _setEnglishDelayed() async {
     _append('--- scheduled: switch to another app now ---');
     await Future<void>.delayed(const Duration(seconds: 3));
@@ -826,6 +877,29 @@ class _FfiPageState extends State<FfiPage> {
   /// these, so one written by 2.x must still restore after upgrading. `_previous`
   /// is the method-channel implementation this page displaced on entry, so both
   /// reads see the same keyboard state a moment apart.
+  /// Runs disable/enable back to back several times. The acceptance criterion
+  /// is that the IME still works afterwards, which the control field shows.
+  Future<void> _runCycles() async {
+    for (var i = 0; i < 5; i++) {
+      await disableIME();
+      await enableIME();
+    }
+    setState(() => _cycles += 5);
+    _append('ran 5 disable/enable cycles (total: $_cycles)');
+  }
+
+  /// Syllables AC00-D7A3, compatibility jamo 3131-3163, conjoining jamo
+  /// 1100-11FF. Checked by code point rather than by eye: a composing glyph
+  /// can look like Hangul on screen without having been committed.
+  static bool _containsHangul(String s) => s.runes.any((r) =>
+      (r >= 0xAC00 && r <= 0xD7A3) ||
+      (r >= 0x3131 && r <= 0x3163) ||
+      (r >= 0x1100 && r <= 0x11FF));
+
+  static String _runesOf(String s) => s.runes
+      .map((r) => 'U+${r.toRadixString(16).toUpperCase().padLeft(4, '0')}')
+      .join(' ');
+
   Future<void> _compareWithNative() async {
     final ffiToken = await getCurrentInputSource();
     final nativeToken = await _previous?.getCurrentInputSource();
@@ -943,6 +1017,52 @@ class _FfiPageState extends State<FfiPage> {
               onPressed: () => setState(() => _log = ''),
               child: const Text('Clear'),
             ),
+          ]),
+          const SizedBox(height: 24),
+          Text('Disable / enable IME',
+              style: Theme.of(context).textTheme.titleMedium),
+          const SizedBox(height: 4),
+          const Text(
+            'Focusing the guarded field detaches the IME context, so '
+            'composition cannot start. The control field is never guarded — if '
+            'Korean cannot be typed there either, a clean guarded field proves '
+            'nothing, because the IME simply was not running.',
+          ),
+          const SizedBox(height: 12),
+          SizedBox(
+            width: 420,
+            child: TextField(
+              controller: _guardedController,
+              focusNode: _guardedFocus,
+              decoration: const InputDecoration(
+                border: OutlineInputBorder(),
+                labelText: 'Guarded — press Han/Yeong and type 안녕',
+              ),
+            ),
+          ),
+          _hangulReadout('guarded', _guardedController.text, wantHangul: false),
+          const SizedBox(height: 16),
+          SizedBox(
+            width: 420,
+            child: TextField(
+              controller: _controlController,
+              decoration: const InputDecoration(
+                border: OutlineInputBorder(),
+                labelText: 'Control — 안녕 must be typable here',
+              ),
+            ),
+          ),
+          _hangulReadout('control', _controlController.text, wantHangul: true),
+          const SizedBox(height: 12),
+          Row(children: [
+            OutlinedButton.icon(
+              onPressed: _runCycles,
+              icon: const Icon(Icons.loop),
+              label: const Text('Run 5 disable/enable cycles'),
+            ),
+            const SizedBox(width: 12),
+            Text('cycles run: $_cycles',
+                style: TextStyle(color: Colors.grey[600])),
           ]),
           const SizedBox(height: 24),
           Text('2.x compatibility',

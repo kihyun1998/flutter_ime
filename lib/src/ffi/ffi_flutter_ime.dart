@@ -115,15 +115,36 @@ class FfiFlutterIme extends FlutterImePlatform {
     ime.setInputSource(sourceId);
   }
 
+  /// Disables the IME so composition cannot start in the app window.
+  ///
+  /// Detaching the IME context is the entire mechanism; the native plugin's
+  /// window-procedure message filter is deliberately not reproduced, because a
+  /// spike showed it never contributed anything the detach did not already do.
+  ///
+  /// Does **not** prevent pasted or programmatically injected text — neither
+  /// did 2.x, since paste never travels the keyboard message path.
+  ///
+  /// **Differs from 2.x**, which raised a `PlatformException` when there was no
+  /// window to operate on. That is silent here, for the reasons given on
+  /// [setEnglishKeyboard].
+  @override
+  Future<void> disableIME() async {
+    final ime = _windowsIme;
+    if (ime == null) return _fallback.disableIME();
+    ime.disableIme();
+  }
+
+  /// Restores normal IME functionality after [disableIME].
+  @override
+  Future<void> enableIME() async {
+    final ime = _windowsIme;
+    if (ime == null) return _fallback.enableIME();
+    ime.enableIme();
+  }
+
   // -------------------------------------------------------------------------
   // Not ported yet — handled by the native plugin
   // -------------------------------------------------------------------------
-
-  @override
-  Future<void> disableIME() => _fallback.disableIME();
-
-  @override
-  Future<void> enableIME() => _fallback.enableIME();
 
   @override
   Future<bool> isCapsLockOn() => _fallback.isCapsLockOn();

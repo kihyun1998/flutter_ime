@@ -95,6 +95,44 @@ class WindowsIme {
     return isEnglishConversionMode(status.conversion);
   }
 
+  /// Disables the IME by detaching its context from the window, so composition
+  /// cannot start at all.
+  ///
+  /// This is the whole mechanism. The native plugin also intercepted `WM_IME_*`
+  /// and Hangul-range `WM_CHAR` in a window-procedure hook, which Dart FFI
+  /// cannot express — a window procedure must return a value synchronously on
+  /// the platform thread. A spike (branch `spike/wndproc-block-necessity`,
+  /// commit `c5c33fb`) established that the hook was dead weight: with the
+  /// interception toggled off at runtime, Korean input was still impossible,
+  /// while a control field that never disabled the IME still accepted it. The
+  /// hook was guarding messages that detaching the context stops from ever
+  /// being generated.
+  ///
+  /// Does **not** prevent pasted or programmatically injected text. It never
+  /// did — paste bypassed the native plugin's interception too, because it
+  /// never travels through the keyboard message path.
+  ///
+  /// Returns false only when there is no window to operate on.
+  bool disableIme() {
+    final window = _resolver.resolve();
+    if (!window.isUsable) return false;
+
+    // A null context with no flags removes the association entirely.
+    _win32.immAssociateContextEx(window.handle, nullptr, 0);
+    return true;
+  }
+
+  /// Restores the window's default IME context, undoing [disableIme].
+  ///
+  /// Returns false only when there is no window to operate on.
+  bool enableIme() {
+    final window = _resolver.resolve();
+    if (!window.isUsable) return false;
+
+    _win32.immAssociateContextEx(window.handle, nullptr, iaceDefault);
+    return true;
+  }
+
   /// Reads the current keyboard layout and IME conversion state as an opaque
   /// token, or null if the layout could not be read.
   ///
