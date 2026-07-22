@@ -12,6 +12,18 @@ import 'core_foundation.dart';
 /// `noErr` — the `OSStatus` value every one of these calls returns on success.
 const int noErr = 0;
 
+/// `includeAllInstalled: false` — list only the input sources showing in the
+/// user's input menu.
+const int tisEnabledOnly = 0;
+
+/// `includeAllInstalled: true` — list every input source installed on the
+/// machine, including ones the user has switched off.
+///
+/// Far wider than it sounds: a machine with five enabled sources can have three
+/// hundred installed. Only worth asking for when an exact identifier is being
+/// looked up.
+const int tisAllInstalled = 1;
+
 typedef _TISCopyCurrentKeyboardInputSourceNative = CFRef Function();
 
 typedef _TISCreateInputSourceListNative = CFRef Function(CFRef, Uint8);

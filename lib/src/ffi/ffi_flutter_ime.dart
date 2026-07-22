@@ -159,30 +159,46 @@ class FfiFlutterIme extends FlutterImePlatform {
 
   /// Reads the current keyboard as an opaque token.
   ///
-  /// Returns null when the layout cannot be read. The token format is
-  /// byte-identical to the one 2.x produced, so a token saved before upgrading
-  /// still restores.
+  /// Returns null when the keyboard cannot be read. The token format is
+  /// byte-identical to the one 2.x produced on each platform — the
+  /// `KLID:conversion:sentence` triple on Windows, the input-source identifier
+  /// on macOS — so a token saved before upgrading still restores.
   @override
   Future<String?> getCurrentInputSource() async {
-    final ime = _windowsIme;
-    if (ime == null) return _fallback.getCurrentInputSource();
-    return ime.getCurrentInputSource();
+    final windows = _windowsIme;
+    if (windows != null) return windows.getCurrentInputSource();
+    final macos = _macosIme;
+    if (macos != null) return macos.getCurrentInputSource();
+    return _fallback.getCurrentInputSource();
   }
 
   /// Restores a keyboard from a token previously returned by
   /// [getCurrentInputSource].
   ///
   /// **Differs from 2.x**, which raised a `PlatformException` when the token
-  /// was malformed or the layout could not be loaded. Both are silent here.
+  /// was malformed or the keyboard could not be loaded. Both are silent here.
   /// Tokens come back from a consumer's own storage and can be stale — the
-  /// saved layout may have been uninstalled since — so a failed restore is an
+  /// saved keyboard may have been uninstalled since — so a failed restore is an
   /// expected outcome rather than an exceptional one. 2.1.4 already had to fix
   /// a crash on this path.
+  ///
+  /// A token that names nothing changes nothing: the keyboard the user is on
+  /// stays selected. On macOS a saved keyboard the user has since switched off
+  /// in System Settings is switched back on before being selected, since
+  /// restoring hands back something that was theirs already.
   @override
   Future<void> setInputSource(String sourceId) async {
-    final ime = _windowsIme;
-    if (ime == null) return _fallback.setInputSource(sourceId);
-    ime.setInputSource(sourceId);
+    final windows = _windowsIme;
+    if (windows != null) {
+      windows.setInputSource(sourceId);
+      return;
+    }
+    final macos = _macosIme;
+    if (macos != null) {
+      macos.setInputSource(sourceId);
+      return;
+    }
+    return _fallback.setInputSource(sourceId);
   }
 
   /// Disables the IME so composition cannot start in the app window.

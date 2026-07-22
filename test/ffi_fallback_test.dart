@@ -163,13 +163,12 @@ void main() {
     });
   });
 
-  group('macOS is half-ported: English operations reach FFI, the rest do not',
-      () {
-    // #16 ports setEnglishKeyboard and isEnglishKeyboard to Text Input Source
-    // Services and nothing else. Both halves of that are worth pinning: the two
-    // ported operations must not also go through the native plugin, and the
-    // unported ones must still get there, because a macOS consumer who installs
-    // this instance today is relying on the fall-through for the other five.
+  group('macOS is half-ported: the input-source operations reach FFI', () {
+    // #16 ported the two English-keyboard operations and #17 the two
+    // input-source ones. Both halves of that are worth pinning: a ported
+    // operation must not also go through the native plugin, and an unported one
+    // must still get there, because a macOS consumer who installs this instance
+    // today is relying on the fall-through for the other three.
     late MockFlutterImePlatform macosFallback;
     late _FakeMacosIme macos;
     late FfiFlutterIme macosFfi;
@@ -201,9 +200,51 @@ void main() {
       expect(macosFallback.calls, isEmpty);
     });
 
+    test('getCurrentInputSource reaches FFI and reports the token it read',
+        () async {
+      macos.token = 'com.apple.inputmethod.Korean.2SetKorean';
+
+      expect(await macosFfi.getCurrentInputSource(),
+          'com.apple.inputmethod.Korean.2SetKorean');
+      expect(macos.calls, ['getCurrentInputSource']);
+      expect(macosFallback.calls, isEmpty);
+    });
+
+    test('setInputSource reaches FFI with the token unchanged', () async {
+      // Byte-identical pass-through is the compatibility requirement: the token
+      // is whatever a consumer persisted, possibly under 2.x.
+      await macosFfi.setInputSource('com.apple.keylayout.Dvorak');
+
+      expect(macos.restored, ['com.apple.keylayout.Dvorak']);
+      expect(macosFallback.calls, isEmpty);
+    });
+
+    test('a token that no longer names anything does not throw', () async {
+      // A saved token can name an input source the user has since removed. That
+      // is an expected outcome of restoring, not an exceptional one.
+      macos.restoreSucceeds = false;
+
+      await expectLater(
+          macosFfi.setInputSource('com.apple.keylayout.Removed'), completes);
+      // The failure is swallowed here rather than retried through the native
+      // plugin: a second attempt would fail the same way, and doing it through
+      // the layer this migration removes would be worse than not doing it.
+      expect(macos.restored, ['com.apple.keylayout.Removed']);
+      expect(macosFallback.calls, isEmpty);
+    });
+
+    test('an unreadable keyboard reports null rather than falling through',
+        () async {
+      // Null means "FFI answered, and the answer is nothing". Treating it as
+      // "FFI has no answer" and retrying on the native plugin would resurrect
+      // the transport this migration exists to delete.
+      macos.token = null;
+
+      expect(await macosFfi.getCurrentInputSource(), isNull);
+      expect(macosFallback.calls, isEmpty);
+    });
+
     test('everything else still falls through to the native plugin', () async {
-      await macosFfi.getCurrentInputSource();
-      await macosFfi.setInputSource('com.apple.keylayout.ABC');
       await macosFfi.disableIME();
       await macosFfi.enableIME();
       await macosFfi.isCapsLockOn();
@@ -213,8 +254,6 @@ void main() {
       expect(
           macosFallback.calls,
           containsAll(<String>[
-            'getCurrentInputSource',
-            'setInputSource',
             'disableIME',
             'enableIME',
             'isCapsLockOn',
@@ -320,8 +359,18 @@ class _FakeWin32 implements Win32 {
 class _FakeMacosIme implements MacosIme {
   final List<String> calls = [];
 
+  /// The tokens [setInputSource] was asked to restore, in order.
+  final List<String> restored = [];
+
   /// What [isEnglishKeyboard] answers.
   bool english = false;
+
+  /// What [getCurrentInputSource] answers.
+  String? token;
+
+  /// What [setInputSource] answers. False stands for a token naming an input
+  /// source that is no longer installed.
+  bool restoreSucceeds = true;
 
   @override
   bool setEnglishKeyboard() {
@@ -333,6 +382,19 @@ class _FakeMacosIme implements MacosIme {
   bool isEnglishKeyboard() {
     calls.add('isEnglishKeyboard');
     return english;
+  }
+
+  @override
+  String? getCurrentInputSource() {
+    calls.add('getCurrentInputSource');
+    return token;
+  }
+
+  @override
+  bool setInputSource(String sourceId) {
+    calls.add('setInputSource');
+    restored.add(sourceId);
+    return restoreSucceeds;
   }
 
   @override

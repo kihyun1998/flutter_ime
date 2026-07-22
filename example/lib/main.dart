@@ -989,11 +989,16 @@ class _FfiPageState extends State<FfiPage> {
     await _check();
   }
 
-  /// Feeds setInputSource a token it must reject. 2.1.4 fixed a crash where a
-  /// malformed token reached the numeric parser and threw across the method
-  /// channel; the app surviving this button is the point of it.
-  Future<void> _restoreMalformed() async {
-    const bad = '00000412:abc:0';
+  /// Feeds setInputSource a token it must reject. The app surviving this
+  /// button is the point of it.
+  ///
+  /// [bad] comes from the caller because the two platforms fail for different
+  /// reasons. Windows tokens have structure and can be malformed — 2.1.4 fixed
+  /// a crash where one reached the numeric parser and threw across the method
+  /// channel. macOS tokens are opaque identifiers with nothing to malform, so
+  /// the failure worth showing there is the one a consumer actually hits: a
+  /// token naming an input source that is no longer installed.
+  Future<void> _restoreUnusable(String bad) async {
     await setInputSource(bad);
     _append('setInputSource("$bad") survived — rejected, no throw');
   }
@@ -1022,6 +1027,16 @@ class _FfiPageState extends State<FfiPage> {
     await setEnglishKeyboard();
     _append('setEnglishKeyboard() called');
     await _checkAndRead();
+  }
+
+  Future<void> _saveAndRead() async {
+    await _save();
+    _readSource();
+  }
+
+  Future<void> _restoreAndRead() async {
+    await _restore();
+    _readSource();
   }
 
   @override
@@ -1210,42 +1225,7 @@ class _FfiPageState extends State<FfiPage> {
                 style: TextStyle(color: Colors.grey[600])),
           ]),
           const SizedBox(height: 24),
-          Text('2.x compatibility',
-              style: Theme.of(context).textTheme.titleMedium),
-          const SizedBox(height: 4),
-          const Text(
-            'Reads the token through the FFI implementation and through the '
-            'native plugin back to back. They must agree: consumers persist '
-            'these tokens, so one saved under 2.x has to restore under 3.x.',
-          ),
-          const SizedBox(height: 8),
-          FilledButton.icon(
-            onPressed: _compareWithNative,
-            icon: const Icon(Icons.compare_arrows),
-            label: const Text('Compare FFI token vs native token'),
-          ),
-          const SizedBox(height: 8),
-          Container(
-            width: double.infinity,
-            padding: const EdgeInsets.all(16),
-            decoration: BoxDecoration(
-              color: _comparisonOk == null
-                  ? Colors.grey[200]
-                  : (_comparisonOk! ? Colors.green[50] : Colors.red[50]),
-              borderRadius: BorderRadius.circular(8),
-            ),
-            child: SelectableText(
-              _comparison,
-              style: TextStyle(
-                fontFamily: 'monospace',
-                fontSize: 13,
-                fontWeight: FontWeight.bold,
-                color: _comparisonOk == null
-                    ? Colors.grey[800]
-                    : (_comparisonOk! ? Colors.green[900] : Colors.red[900]),
-              ),
-            ),
-          ),
+          _tokenCompatibilitySection(context),
           const SizedBox(height: 24),
           Text('Save and restore',
               style: Theme.of(context).textTheme.titleMedium),
@@ -1273,7 +1253,7 @@ class _FfiPageState extends State<FfiPage> {
               label: const Text('setInputSource(saved)'),
             ),
             OutlinedButton.icon(
-              onPressed: _restoreMalformed,
+              onPressed: () => _restoreUnusable('00000412:abc:0'),
               icon: const Icon(Icons.bug_report_outlined),
               label: const Text('restore a malformed token'),
             ),
@@ -1300,6 +1280,57 @@ class _FfiPageState extends State<FfiPage> {
           ),
         ],
       ),
+    );
+  }
+
+  /// The FFI-token-versus-native-token check, which reads the same on both
+  /// platforms.
+  ///
+  /// The token format is a hard compatibility requirement everywhere — a
+  /// consumer persists one under 2.x and has to be able to restore it under
+  /// 3.x — so the two builds below show the identical panel rather than each
+  /// wording it their own way.
+  Widget _tokenCompatibilitySection(BuildContext context) {
+    return Column(
+      crossAxisAlignment: CrossAxisAlignment.start,
+      children: [
+        Text('2.x compatibility',
+            style: Theme.of(context).textTheme.titleMedium),
+        const SizedBox(height: 4),
+        const Text(
+          'Reads the token through the FFI implementation and through the '
+          'native plugin back to back. They must agree: consumers persist '
+          'these tokens, so one saved under 2.x has to restore under 3.x.',
+        ),
+        const SizedBox(height: 8),
+        FilledButton.icon(
+          onPressed: _compareWithNative,
+          icon: const Icon(Icons.compare_arrows),
+          label: const Text('Compare FFI token vs native token'),
+        ),
+        const SizedBox(height: 8),
+        Container(
+          width: double.infinity,
+          padding: const EdgeInsets.all(16),
+          decoration: BoxDecoration(
+            color: _comparisonOk == null
+                ? Colors.grey[200]
+                : (_comparisonOk! ? Colors.green[50] : Colors.red[50]),
+            borderRadius: BorderRadius.circular(8),
+          ),
+          child: SelectableText(
+            _comparison,
+            style: TextStyle(
+              fontFamily: 'monospace',
+              fontSize: 13,
+              fontWeight: FontWeight.bold,
+              color: _comparisonOk == null
+                  ? Colors.grey[800]
+                  : (_comparisonOk! ? Colors.green[900] : Colors.red[900]),
+            ),
+          ),
+        ),
+      ],
     );
   }
 
@@ -1411,6 +1442,47 @@ class _FfiPageState extends State<FfiPage> {
               ),
             ),
           ),
+          const SizedBox(height: 24),
+          Text('Save and restore',
+              style: Theme.of(context).textTheme.titleMedium),
+          const SizedBox(height: 4),
+          const Text(
+            'Save the current input source, switch it by hand from the menu '
+            'bar or with setEnglishKeyboard(), then restore. Try it with a '
+            'non-English source such as a Korean IME — the token is the input '
+            'source ID and its format is unchanged from 2.x, so one saved '
+            'before upgrading still restores.\n\n'
+            'A source you have switched off in System Settings since saving is '
+            'switched back on before being selected. A source you have removed '
+            'outright cannot come back: that restore fails, leaves you on the '
+            'keyboard you are already using, and does not throw.',
+          ),
+          const SizedBox(height: 12),
+          SelectableText(
+            'saved token: ${_saved ?? "(nothing saved)"}',
+            style: const TextStyle(fontFamily: 'monospace', fontSize: 12),
+          ),
+          const SizedBox(height: 8),
+          Wrap(spacing: 12, runSpacing: 8, children: [
+            FilledButton.tonalIcon(
+              onPressed: _saveAndRead,
+              icon: const Icon(Icons.bookmark_add_outlined),
+              label: const Text('getCurrentInputSource()'),
+            ),
+            OutlinedButton.icon(
+              onPressed: _saved == null ? null : _restoreAndRead,
+              icon: const Icon(Icons.restore),
+              label: const Text('setInputSource(saved)'),
+            ),
+            OutlinedButton.icon(
+              onPressed: () =>
+                  _restoreUnusable('com.apple.keylayout.NoSuchLayout'),
+              icon: const Icon(Icons.bug_report_outlined),
+              label: const Text('restore an uninstalled source'),
+            ),
+          ]),
+          const SizedBox(height: 24),
+          _tokenCompatibilitySection(context),
           const SizedBox(height: 16),
           Container(
             width: double.infinity,

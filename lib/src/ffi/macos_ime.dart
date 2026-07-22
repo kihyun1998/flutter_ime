@@ -41,7 +41,13 @@ class MacosIme {
   ///
   /// Returns false when that layout is not among the user's enabled input
   /// sources, or when the switch is refused.
-  bool setEnglishKeyboard() => _selectInputSourceById(_englishInputSourceId);
+  ///
+  /// Deliberately restricted to sources the user has already enabled, unlike
+  /// [setInputSource]. Selecting ABC for someone who never enabled it would add
+  /// a keyboard to their input menu that they did not ask for. Restoring is
+  /// different: it hands back a keyboard that was theirs to begin with.
+  bool setEnglishKeyboard() =>
+      _selectInputSourceById(_englishInputSourceId, includeUnenabled: false);
 
   /// Whether the selected layout types English.
   ///
@@ -55,18 +61,57 @@ class MacosIme {
           (source) => isEnglishInputSource(_readLanguages(source))) ??
       false;
 
+  /// The selected input source's identifier, as an opaque token, or null when
+  /// it cannot be read.
+  ///
+  /// The identifier *is* the token, exactly as in 2.x — `setInputSource` on
+  /// this platform has nothing to parse. Consumers persist these, so a token
+  /// saved before upgrading has to restore afterwards, and the only way to
+  /// guarantee that is to keep producing the same bytes for the same keyboard.
+  // The explicit type argument is load-bearing: without it T infers as String
+  // from the return type, and _readSourceId — which can answer null — no longer
+  // fits the callback.
+  String? getCurrentInputSource() =>
+      _withCurrentInputSource<String?>(_readSourceId);
+
+  /// Restores the input source named by [sourceId], enabling it first if the
+  /// user has it installed but switched off.
+  ///
+  /// Returns false when nothing installed carries that identifier — the usual
+  /// reason being that the user removed the input source since the token was
+  /// saved. That is an expected outcome of restoring rather than an
+  /// exceptional one, so it is reported rather than thrown, and nothing is
+  /// changed on the way to reporting it: the keyboard the user is on stays
+  /// selected.
+  ///
+  /// Unlike the Windows token, there is nothing here to validate before
+  /// calling the OS. Any string is a syntactically valid identifier, so a
+  /// meaningless one is indistinguishable from an uninstalled one until the
+  /// system is asked, and both answer false.
+  ///
+  /// **Differs from 2.x**, which searched only the sources showing in the input
+  /// menu. It called `TISEnableInputSource` before selecting, but nothing it
+  /// could find was ever switched off, so that call could not do anything — the
+  /// documented behaviour was unreachable. Searching everything installed is
+  /// what makes "enabled before selection" real rather than nominal.
+  ///
+  /// The cost of that widening is worth stating: [sourceId] is whatever a
+  /// caller passes, so an identifier naming a keyboard the user has never
+  /// enabled will be added to their input menu. Restoring a token this package
+  /// produced can only ever hand back a keyboard that was theirs, but nothing
+  /// enforces that a token came from here.
+  bool setInputSource(String sourceId) =>
+      _selectInputSourceById(sourceId, includeUnenabled: true);
+
   /// The selected input source's identifier and languages, for diagnostics.
   ///
   /// Returns a string rather than a structured value because it crosses the
   /// conditional-import boundary into the example app, where the web stub
   /// cannot name a type that depends on `dart:ffi`. Intended for confirming by
   /// eye that a non-QWERTY English layout classifies correctly.
-  String? describeCurrentInputSource() => _withCurrentInputSource((source) {
-        final id = _readString(_tis.getInputSourceProperty(
-                source, _tis.propertyInputSourceId)) ??
-            '(no id)';
-        return '$id  languages: ${_readLanguages(source)}';
-      });
+  String? describeCurrentInputSource() => _withCurrentInputSource(
+      (source) => '${_readSourceId(source) ?? '(no id)'}  '
+          'languages: ${_readLanguages(source)}');
 
   /// Runs [body] against the selected keyboard input source, releasing it on
   /// every exit path. Returns null when there is no current input source to
@@ -83,6 +128,13 @@ class MacosIme {
       _cf.release(source);
     }
   }
+
+  /// An input source's identifier, or null if it declares none.
+  ///
+  /// `TISGetInputSourceProperty` is a **get**: the string belongs to the input
+  /// source and is not released here.
+  String? _readSourceId(CFRef source) => _readString(
+      _tis.getInputSourceProperty(source, _tis.propertyInputSourceId));
 
   /// The languages an input source types, most significant first, or an empty
   /// list when it declares none.
@@ -133,11 +185,24 @@ class MacosIme {
     }
   }
 
-  /// Selects the enabled input source whose identifier is [id].
+  /// Selects the input source whose identifier is [id].
   ///
-  /// Returns false when no enabled input source matches, or when the selection
-  /// is refused.
-  bool _selectInputSourceById(String id) {
+  /// [includeUnenabled] widens the search from the sources showing in the
+  /// user's input menu to everything installed on the machine. It is the whole
+  /// difference between the two callers, and it is a policy decision rather
+  /// than a mechanical one — see [setEnglishKeyboard] and [setInputSource].
+  ///
+  /// Returns false when nothing matches or the selection is refused.
+  ///
+  /// An identifier that matches nothing changes nothing: the search runs before
+  /// anything that mutates, so it never reaches the enable or the select. A
+  /// match that is then *refused* by [TextInputSources.selectInputSource] is
+  /// the one case that leaves a trace — the enable has already run, so a source
+  /// that was switched off is now switched on but not selected. That is not
+  /// rolled back: the pre-restore state would have to be read first, the
+  /// rollback can fail on its own, and leaving a keyboard enabled is a far
+  /// smaller surprise than the alternative failure modes of undoing it.
+  bool _selectInputSourceById(String id, {required bool includeUnenabled}) {
     final wanted = _newString(id);
     if (wanted == nullptr) return false;
 
@@ -147,10 +212,8 @@ class MacosIme {
     _cf.release(wanted);
     if (filter == nullptr) return false;
 
-    // False for includeAllInstalled: only sources the user has enabled. This
-    // matches 2.x. Selecting a source the user never enabled would put a
-    // keyboard in their menu bar that they did not ask for.
-    final matches = _tis.createInputSourceList(filter, 0);
+    final matches = _tis.createInputSourceList(
+        filter, includeUnenabled ? tisAllInstalled : tisEnabledOnly);
     _cf.release(filter);
     if (matches == nullptr) return false;
 
@@ -158,10 +221,11 @@ class MacosIme {
       if (_cf.arrayGetCount(matches) == 0) return false;
       // A get: the source belongs to the array.
       final source = _cf.arrayGetValueAtIndex(matches, 0);
-      // Belt and braces, kept from 2.x: everything in this list is enabled
-      // already, since the list was built with includeAllInstalled false, so
-      // this is a no-op today. It costs one call and is what stands between us
-      // and a silent failure if that filter ever widens.
+      // Enable before select. A source that is installed but switched off is
+      // refused by TISSelectInputSource, and it is exactly what a restore can
+      // land on: the user can have turned the keyboard off in System Settings
+      // between saving the token and restoring it. Enabling one already enabled
+      // is a no-op, which is why the narrow caller can share this path.
       _tis.enableInputSource(source);
       return _tis.selectInputSource(source) == noErr;
     } finally {
