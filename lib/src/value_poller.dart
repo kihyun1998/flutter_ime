@@ -7,16 +7,23 @@
 /// callable is bound to its isolate's thread, and a listener callable is
 /// asynchronous and returns nothing.
 ///
+/// macOS is not in that position — a distributed notification observer returns
+/// nothing, so it can be bridged — which is why the timer lives here rather
+/// than in [ChangeStream]. Everything the two platforms agree on is there
+/// instead; this file is only the clock.
+///
 /// The value is read through an injected callback rather than read directly,
-/// so the timing and de-duplication rules here are unit-testable under
-/// `FakeAsync` with no timer, no OS call and no IME. This is the same seam
-/// shape the window resolver uses for its lookups.
+/// so the timing and de-duplication rules are unit-testable under `FakeAsync`
+/// with no timer, no OS call and no IME. This is the same seam shape the window
+/// resolver uses for its lookups.
 ///
 /// Kept free of `dart:ffi` so it can be tested on any platform, and so the FFI
 /// layer stays a thin adapter with no branching logic of its own.
 library;
 
 import 'dart:async';
+
+import 'change_stream.dart';
 
 /// Reads [read] every [interval] while something is listening, and emits each
 /// value that differs from the one before it.
@@ -27,106 +34,28 @@ import 'dart:async';
 /// [T] is non-nullable so that "no value yet" and "the value is null" cannot be
 /// confused — the absence of a baseline is meaningful state here.
 class ValuePoller<T extends Object> {
-  ValuePoller({required T? Function() read, required Duration interval})
-      : _read = read,
-        _interval = interval;
+  ValuePoller({required T? Function() read, required Duration interval}) {
+    _changes = ChangeStream<T>(
+      read: read,
+      start: (reread) => _timer = Timer.periodic(interval, (_) => reread()),
+      stop: () {
+        _timer?.cancel();
+        _timer = null;
+      },
+    );
+  }
 
-  /// Returns the current value, or null when it momentarily cannot be read.
-  ///
-  /// Null is not a value — it is "ask again next tick". The Windows IME
-  /// conversion state is unreadable while `disableIME()` has the context
-  /// detached, and reporting that as a value would announce an input-source
-  /// change on every disable and another on every enable, neither of which
-  /// happened.
-  final T? Function() _read;
-  final Duration _interval;
-
-  StreamController<T>? _controller;
+  late final ChangeStream<T> _changes;
   Timer? _timer;
-  bool _disposed = false;
-
-  /// The value the next poll compares against, or null when there is nothing to
-  /// compare against yet. Captured when a listener attaches, never before.
-  T? _baseline;
 
   /// Changes to the polled value, as a broadcast stream.
   ///
-  /// The value current when a listener attaches is **not** emitted. It becomes
-  /// the baseline, and only later transitions are reported — a stream named for
-  /// changes should not fire merely because it was subscribed to. The native
-  /// plugin behaved the same way: attaching a sink captured the state rather
-  /// than sending it.
-  Stream<T> get stream {
-    if (_disposed) {
-      // Without this the getter would quietly build a second controller and
-      // start a second timer, so a disposed poller would come back to life on
-      // the next listen.
-      throw StateError('This ValuePoller has been disposed.');
-    }
-    final controller = _controller ??= StreamController<T>.broadcast(
-      onListen: _startPolling,
-      onCancel: _stopPolling,
-    );
-    return controller.stream;
-  }
-
-  void _startPolling() {
-    // Start the timer before taking the baseline. If the read throws, the
-    // exception would otherwise escape `listen()` with the subscription already
-    // registered, leaving a stream that is subscribed but permanently dead —
-    // `onListen` only fires for the first listener and would never fire again.
-    _timer = Timer.periodic(_interval, (_) => _poll());
-
-    // Re-read on every fresh subscription. A change that happened while nobody
-    // was listening is not replayed: the one-shot query is there for callers
-    // who need the current value, and the stream reports transitions it
-    // actually observed.
-    _baseline = _readOrNull();
-  }
-
-  void _poll() {
-    final value = _readOrNull();
-    // An unreadable value is not a change. Skipping the tick keeps a transient
-    // gap from being reported as a transition, and preserves the baseline so
-    // the comparison resumes against the last value actually seen.
-    if (value == null) return;
-
-    if (_baseline == null) {
-      _baseline = value;
-      return;
-    }
-    if (value == _baseline) return;
-
-    _baseline = value;
-    _controller?.add(value);
-  }
-
-  /// Reads the value, treating a thrown error the same as an unreadable one.
-  ///
-  /// The readers this is used with are written not to throw, but they do
-  /// allocate. A throw inside `Timer.periodic` escapes as an uncaught async
-  /// error, which would reach the app's zone on every interval.
-  T? _readOrNull() {
-    try {
-      return _read();
-    } catch (_) {
-      return null;
-    }
-  }
-
-  void _stopPolling() {
-    _timer?.cancel();
-    _timer = null;
-    _baseline = null;
-  }
+  /// The value current when a listener attaches is **not** emitted; it becomes
+  /// the baseline. See [ChangeStream.stream].
+  Stream<T> get stream => _changes.stream;
 
   /// Stops polling and closes the stream. Safe to call more than once.
   ///
   /// Reading [stream] afterwards throws rather than silently starting over.
-  void dispose() {
-    _disposed = true;
-    _stopPolling();
-    _controller?.close();
-    _controller = null;
-  }
+  void dispose() => _changes.dispose();
 }

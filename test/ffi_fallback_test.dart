@@ -163,12 +163,15 @@ void main() {
     });
   });
 
-  group('macOS is half-ported: the input-source operations reach FFI', () {
-    // #16 ported the two English-keyboard operations and #17 the two
-    // input-source ones. Both halves of that are worth pinning: a ported
-    // operation must not also go through the native plugin, and an unported one
-    // must still get there, because a macOS consumer who installs this instance
-    // today is relying on the fall-through for the other three.
+  group('every macOS operation that exists now reaches FFI', () {
+    // #16, #17 and #18 between them port everything macOS supports. What is
+    // left going to the native plugin is disableIME and enableIME, which macOS
+    // never supported in the first place.
+    //
+    // Which mechanism each stream uses is asserted, not just that it works:
+    // the input-source stream is push and the Caps Lock stream is polled, and
+    // if one quietly became the other the stream would still deliver values —
+    // only the latency, or the permission it silently needs, would change.
     late MockFlutterImePlatform macosFallback;
     late _FakeMacosIme macos;
     late FfiFlutterIme macosFfi;
@@ -244,22 +247,56 @@ void main() {
       expect(macosFallback.calls, isEmpty);
     });
 
-    test('everything else still falls through to the native plugin', () async {
+    test('isCapsLockOn reaches FFI', () async {
+      macos.capsLock = true;
+
+      expect(await macosFfi.isCapsLockOn(), isTrue);
+      expect(macosFallback.calls, isEmpty);
+    });
+
+    test('onCapsLockChanged polls FFI', () async {
+      final subscription = macosFfi.onCapsLockChanged.listen((_) {});
+      addTearDown(subscription.cancel);
+
+      expect(macos.calls, contains('isCapsLockOn'),
+          reason: 'the poller takes a baseline when a listener attaches');
+      expect(macosFallback.calls, isEmpty);
+    });
+
+    test('onInputSourceChanged registers a notification observer, not a timer',
+        () async {
+      // The point of the macOS half of #18: delivery is push. If this ever
+      // silently became a poller, the stream would still work and only the
+      // latency would change, so the mechanism has to be asserted directly.
+      final subscription = macosFfi.onInputSourceChanged.listen((_) {});
+
+      expect(macos.observerStarts, 1);
+      expect(macosFallback.calls, isEmpty);
+
+      await subscription.cancel();
+      expect(macos.observerStops, 1,
+          reason: 'the observer and its native callable must not outlive the '
+              'last listener');
+    });
+
+    test('repeated listen/cancel cycles leave no observer behind', () async {
+      for (var i = 0; i < 3; i++) {
+        await macosFfi.onInputSourceChanged.listen((_) {}).cancel();
+      }
+
+      expect(macos.observerStarts, 3);
+      expect(macos.observerStops, 3);
+    });
+
+    test('disableIME and enableIME still fall through to the native plugin',
+        () async {
+      // Unsupported on macOS by design rather than unported, so these keep
+      // going to the plugin that reports them as unsupported.
       await macosFfi.disableIME();
       await macosFfi.enableIME();
-      await macosFfi.isCapsLockOn();
-      await macosFfi.onInputSourceChanged.listen((_) {}).cancel();
-      await macosFfi.onCapsLockChanged.listen((_) {}).cancel();
 
-      expect(
-          macosFallback.calls,
-          containsAll(<String>[
-            'disableIME',
-            'enableIME',
-            'isCapsLockOn',
-            'onInputSourceChanged',
-            'onCapsLockChanged',
-          ]));
+      expect(macosFallback.calls,
+          containsAll(<String>['disableIME', 'enableIME']));
       expect(macos.calls, isEmpty);
     });
   });
@@ -368,6 +405,17 @@ class _FakeMacosIme implements MacosIme {
   /// What [getCurrentInputSource] answers.
   String? token;
 
+  /// What [isCapsLockOn] answers.
+  bool capsLock = false;
+
+  /// What [readEnglishStateOrNull] answers.
+  bool? englishOrNull = false;
+
+  /// How often the notification observer was registered and unregistered.
+  /// Every registration is a native callable that has to be closed again.
+  int observerStarts = 0;
+  int observerStops = 0;
+
   /// What [setInputSource] answers. False stands for a token naming an input
   /// source that is no longer installed.
   bool restoreSucceeds = true;
@@ -395,6 +443,28 @@ class _FakeMacosIme implements MacosIme {
     calls.add('setInputSource');
     restored.add(sourceId);
     return restoreSucceeds;
+  }
+
+  @override
+  bool isCapsLockOn() {
+    calls.add('isCapsLockOn');
+    return capsLock;
+  }
+
+  @override
+  bool? readEnglishStateOrNull() {
+    calls.add('readEnglishStateOrNull');
+    return englishOrNull;
+  }
+
+  @override
+  void startInputSourceNotifications(void Function() onChanged) {
+    observerStarts++;
+  }
+
+  @override
+  void stopInputSourceNotifications() {
+    observerStops++;
   }
 
   @override

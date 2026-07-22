@@ -11,7 +11,9 @@ topics:
   - macos
 
 environment:
-  sdk: ">=3.0.0 <4.0.0"
+  # 3.1.0 for NativeCallable, which is how the macOS input-source notification
+  # observer is bridged. Nothing else in the package needs it.
+  sdk: ">=3.1.0 <4.0.0"
   flutter: ">=3.3.0"
 
 dependencies:

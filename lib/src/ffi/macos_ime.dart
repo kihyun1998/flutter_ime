@@ -18,15 +18,21 @@ import 'package:ffi/ffi.dart';
 
 import '../english_input_source.dart';
 import 'core_foundation.dart';
+import 'core_graphics.dart';
 import 'text_input_sources.dart';
 
 class MacosIme {
-  MacosIme({CoreFoundation? coreFoundation, TextInputSources? textInputSources})
-      : _cf = coreFoundation ?? CoreFoundation.instance,
-        _tis = textInputSources ?? TextInputSources.instance;
+  MacosIme({
+    CoreFoundation? coreFoundation,
+    TextInputSources? textInputSources,
+    CoreGraphics? coreGraphics,
+  })  : _cf = coreFoundation ?? CoreFoundation.instance,
+        _tis = textInputSources ?? TextInputSources.instance,
+        _cg = coreGraphics ?? CoreGraphics.instance;
 
   final CoreFoundation _cf;
   final TextInputSources _tis;
+  final CoreGraphics _cg;
 
   /// The layout [setEnglishKeyboard] switches to.
   ///
@@ -56,10 +62,28 @@ class MacosIme {
   /// answer true where 2.x answered false. See [isEnglishInputSource].
   ///
   /// Returns false when the current input source cannot be read.
-  bool isEnglishKeyboard() =>
-      _withCurrentInputSource(
-          (source) => isEnglishInputSource(_readLanguages(source))) ??
-      false;
+  bool isEnglishKeyboard() => readEnglishStateOrNull() ?? false;
+
+  /// The English state for the input-source stream to read, or null while there
+  /// is no readable current input source.
+  ///
+  /// Distinct from [isEnglishKeyboard], which collapses "unreadable" to false
+  /// for fidelity with 2.x. That collapse is wrong for a change stream: an
+  /// unreadable moment would be announced as a switch to a non-English
+  /// keyboard, and then announced again on the way back. The same split exists
+  /// on the Windows side for the same reason.
+  bool? readEnglishStateOrNull() => _withCurrentInputSource(
+      (source) => isEnglishInputSource(_readLanguages(source)));
+
+  /// Whether Caps Lock is currently on.
+  ///
+  /// Reads hardware modifier state, so it needs no window and no focus. See
+  /// [CoreGraphics.eventSourceFlagsState] for why it also needs no permission,
+  /// which is the point of it.
+  bool isCapsLockOn() =>
+      (_cg.eventSourceFlagsState(cgEventSourceStateHidSystemState) &
+          cgEventFlagMaskAlphaShift) !=
+      0;
 
   /// The selected input source's identifier, as an opaque token, or null when
   /// it cannot be read.
@@ -112,6 +136,90 @@ class MacosIme {
   String? describeCurrentInputSource() => _withCurrentInputSource(
       (source) => '${_readSourceId(source) ?? '(no id)'}  '
           'languages: ${_readLanguages(source)}');
+
+  /// The live registration with the distributed notification centre, or null
+  /// while nothing is listening.
+  ///
+  /// Holding the callable is not optional bookkeeping. A `NativeCallable` keeps
+  /// its isolate alive until closed, so dropping this reference without
+  /// closing it leaks the callable *and* pins the isolate.
+  NativeCallable<CFNotificationCallbackNative>? _inputSourceObserver;
+
+  /// Starts telling [onChanged] that the keyboard may have moved.
+  ///
+  /// Push, not polling. macOS posts a distributed notification on every
+  /// input-source change, and a notification callback returns nothing — which
+  /// is precisely what a listener-style native callable can be. The Windows
+  /// blocker was never that FFI cannot take callbacks; it was that a window
+  /// procedure has to return a value synchronously. No return value, no
+  /// problem.
+  ///
+  /// **[onChanged] fires more often than the keyboard changes.** macOS posts
+  /// this notification twice for a single switch, and the callback carries no
+  /// useful payload anyway, so it is a hint to re-read rather than an event.
+  /// De-duplication belongs to whatever reads the value — see `ChangeStream`.
+  ///
+  /// Does nothing if already started, so the caller cannot register two
+  /// observers for one stream.
+  void startInputSourceNotifications(void Function() onChanged) {
+    if (_inputSourceObserver != null) return;
+
+    // A listener callable, not an isolate-local one: the notification arrives
+    // on whichever thread the run loop delivers it on, and only the listener
+    // kind may be invoked from a thread that is not the isolate's.
+    final callable = NativeCallable<CFNotificationCallbackNative>.listener(
+      (CFRef _, CFRef __, CFRef ___, CFRef ____, CFRef _____) => onChanged(),
+    );
+
+    // Register before storing. A failed registration must leave nothing
+    // behind: an unclosed callable pins the isolate alive for the rest of the
+    // process, and storing it first would hand back a handle to an observer
+    // that was never registered.
+    try {
+      _cf.notificationCenterAddObserver(
+        _cf.notificationCenterGetDistributedCenter(),
+        // The observer token is compared by pointer identity when removing and
+        // never dereferenced, so the callable's own address serves — unique per
+        // registration and alive for exactly as long as the registration is.
+        callable.nativeFunction.cast(),
+        callable.nativeFunction,
+        _tis.notifySelectedKeyboardInputSourceChanged,
+        nullptr,
+        cfNotificationSuspensionBehaviorDeliverImmediately,
+      );
+    } catch (_) {
+      callable.close();
+      rethrow;
+    }
+    _inputSourceObserver = callable;
+  }
+
+  /// Unregisters the observer and closes the callable. Safe to call when
+  /// nothing was started.
+  ///
+  /// Order matters: remove first, then close. Closing a callable that the
+  /// notification centre could still invoke would be a call through freed
+  /// memory.
+  void stopInputSourceNotifications() {
+    final callable = _inputSourceObserver;
+    if (callable == null) return;
+    _inputSourceObserver = null;
+
+    // The close has to happen even if the removal throws, or the handle is
+    // gone and the callable can never be closed by anyone. Closing a callable
+    // the centre might still invoke is the worse of the two failures, which is
+    // why the removal goes first and only its *failure* is tolerated.
+    try {
+      _cf.notificationCenterRemoveObserver(
+        _cf.notificationCenterGetDistributedCenter(),
+        callable.nativeFunction.cast(),
+        _tis.notifySelectedKeyboardInputSourceChanged,
+        nullptr,
+      );
+    } finally {
+      callable.close();
+    }
+  }
 
   /// Runs [body] against the selected keyboard input source, releasing it on
   /// every exit path. Returns null when there is no current input source to

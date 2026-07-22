@@ -58,6 +58,40 @@ typedef _CFDictionaryCreateNative = CFRef Function(
 typedef _CFDictionaryCreateDart = CFRef Function(
     CFRef, Pointer<CFRef>, Pointer<CFRef>, int, CFRef, CFRef);
 
+// ---------------------------------------------------------------------------
+// Distributed notifications
+// ---------------------------------------------------------------------------
+
+/// `CFNotificationSuspensionBehaviorDeliverImmediately` — deliver even while
+/// the application is suspended, rather than coalescing or dropping.
+///
+/// An input-source change is a discrete event with no meaningful "latest
+/// value", and the app being in the background is exactly when the user is off
+/// changing their keyboard.
+const int cfNotificationSuspensionBehaviorDeliverImmediately = 4;
+
+/// The shape of a `CFNotificationCallback`: centre, observer, name, object,
+/// userInfo.
+typedef CFNotificationCallbackNative = Void Function(
+    CFRef, CFRef, CFRef, CFRef, CFRef);
+
+typedef _CFNotificationCenterGetDistributedCenterNative = CFRef Function();
+
+typedef _CFNotificationCenterAddObserverNative = Void Function(
+    CFRef,
+    CFRef,
+    Pointer<NativeFunction<CFNotificationCallbackNative>>,
+    CFRef,
+    CFRef,
+    IntPtr);
+typedef _CFNotificationCenterAddObserverDart = void Function(CFRef, CFRef,
+    Pointer<NativeFunction<CFNotificationCallbackNative>>, CFRef, CFRef, int);
+
+typedef _CFNotificationCenterRemoveObserverNative = Void Function(
+    CFRef, CFRef, CFRef, CFRef);
+typedef _CFNotificationCenterRemoveObserverDart = void Function(
+    CFRef, CFRef, CFRef, CFRef);
+
 /// Lazily opened bindings to CoreFoundation.
 ///
 /// Opening is deferred to first use so that merely constructing the FFI
@@ -122,6 +156,30 @@ class CoreFoundation {
   late final dictionaryCreate =
       _lib.lookupFunction<_CFDictionaryCreateNative, _CFDictionaryCreateDart>(
           'CFDictionaryCreate');
+
+  /// The notification centre that carries messages between processes, which is
+  /// where macOS announces an input-source change.
+  ///
+  /// **Get semantics** — a process-wide singleton, not ours to release.
+  late final notificationCenterGetDistributedCenter = _lib.lookupFunction<
+          _CFNotificationCenterGetDistributedCenterNative,
+          _CFNotificationCenterGetDistributedCenterNative>(
+      'CFNotificationCenterGetDistributedCenter');
+
+  /// Registers [CFNotificationCallbackNative] for one notification name.
+  ///
+  /// The observer argument is an opaque token, not an object: it is compared by
+  /// pointer identity when removing, and never dereferenced.
+  late final notificationCenterAddObserver = _lib.lookupFunction<
+      _CFNotificationCenterAddObserverNative,
+      _CFNotificationCenterAddObserverDart>('CFNotificationCenterAddObserver');
+
+  /// Unregisters what [notificationCenterAddObserver] registered, matched on
+  /// the same observer token.
+  late final notificationCenterRemoveObserver = _lib.lookupFunction<
+          _CFNotificationCenterRemoveObserverNative,
+          _CFNotificationCenterRemoveObserverDart>(
+      'CFNotificationCenterRemoveObserver');
 
   /// `kCFTypeDictionaryKeyCallBacks` — the retain/release callbacks that make a
   /// dictionary own its keys.

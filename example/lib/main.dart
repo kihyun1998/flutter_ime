@@ -802,11 +802,9 @@ class _FfiPageState extends State<FfiPage> {
     _guardedController.addListener(() => setState(() {}));
     _controlController.addListener(() => setState(() {}));
 
-    // Windows only. Both streams are polled there, and nothing is polled until
-    // these subscriptions exist. On macOS neither stream is ported yet, so
-    // subscribing would only start the native plugin's monitors for a readout
-    // this page does not show.
-    if (Platform.isWindows) _subscribe();
+    // Nothing runs until these subscriptions exist, on either platform: the
+    // pollers start no timer and macOS registers no notification observer.
+    _subscribe();
   }
 
   void _subscribe() {
@@ -1134,57 +1132,8 @@ class _FfiPageState extends State<FfiPage> {
             'repeats a value.',
           ),
           const SizedBox(height: 12),
-          Row(children: [
-            Switch(
-              value: _streaming,
-              onChanged: (on) => setState(() {
-                if (on) {
-                  _subscribe();
-                } else {
-                  _cancelSubscriptions();
-                  _capsLive = null;
-                }
-              }),
-            ),
-            const SizedBox(width: 8),
-            Text(_streaming
-                ? 'subscribed — polling every 50ms'
-                : 'unsubscribed — nothing is polled'),
-          ]),
-          const SizedBox(height: 8),
-          Row(children: [
-            Icon(Icons.keyboard_capslock,
-                color: _capsLive == true ? Colors.orange : Colors.grey),
-            const SizedBox(width: 8),
-            Text('stream says Caps Lock: '
-                '${_capsLive == null ? "(no change seen yet)" : (_capsLive! ? "ON" : "OFF")}'),
-            const SizedBox(width: 16),
-            OutlinedButton.icon(
-              onPressed: _queryCapsLock,
-              icon: const Icon(Icons.help_outline),
-              label: const Text('isCapsLockOn()'),
-            ),
-          ]),
-          const SizedBox(height: 8),
-          Container(
-            width: double.infinity,
-            height: 130,
-            padding: const EdgeInsets.all(12),
-            decoration: BoxDecoration(
-              color: Colors.grey[200],
-              borderRadius: BorderRadius.circular(8),
-            ),
-            child: _streamLog.isEmpty
-                ? const Text('(no events yet)')
-                : ListView(
-                    children: _streamLog
-                        .take(20)
-                        .map((line) => Text(line,
-                            style: const TextStyle(
-                                fontFamily: 'monospace', fontSize: 12)))
-                        .toList(),
-                  ),
-          ),
+          _liveStreamsSection(
+              subscribedLabel: 'subscribed — polling every 50ms'),
           const SizedBox(height: 24),
           Text('Disable / enable IME',
               style: Theme.of(context).textTheme.titleMedium),
@@ -1287,6 +1236,76 @@ class _FfiPageState extends State<FfiPage> {
           ),
         ],
       ),
+    );
+  }
+
+  /// The subscribe switch, the live Caps Lock readout and the event log.
+  ///
+  /// One widget for both platforms because the streams are the same streams;
+  /// only the wording differs, since Windows polls both and macOS is pushed the
+  /// input-source half.
+  Widget _liveStreamsSection({
+    required String subscribedLabel,
+    String unsubscribedLabel = 'unsubscribed — nothing is polled',
+    String? hint,
+  }) {
+    return Column(
+      crossAxisAlignment: CrossAxisAlignment.start,
+      children: [
+        Row(children: [
+          Switch(
+            value: _streaming,
+            onChanged: (on) => setState(() {
+              if (on) {
+                _subscribe();
+              } else {
+                _cancelSubscriptions();
+                _capsLive = null;
+              }
+            }),
+          ),
+          const SizedBox(width: 8),
+          Text(_streaming ? subscribedLabel : unsubscribedLabel),
+        ]),
+        const SizedBox(height: 8),
+        Row(children: [
+          Icon(Icons.keyboard_capslock,
+              color: _capsLive == true ? Colors.orange : Colors.grey),
+          const SizedBox(width: 8),
+          Text('stream says Caps Lock: '
+              '${_capsLive == null ? "(no change seen yet)" : (_capsLive! ? "ON" : "OFF")}'),
+          const SizedBox(width: 16),
+          OutlinedButton.icon(
+            onPressed: _queryCapsLock,
+            icon: const Icon(Icons.help_outline),
+            label: const Text('isCapsLockOn()'),
+          ),
+        ]),
+        if (hint != null) ...[
+          const SizedBox(height: 8),
+          Text(hint, style: TextStyle(fontSize: 12, color: Colors.grey[700])),
+        ],
+        const SizedBox(height: 8),
+        Container(
+          width: double.infinity,
+          height: 130,
+          padding: const EdgeInsets.all(12),
+          decoration: BoxDecoration(
+            color: Colors.grey[200],
+            borderRadius: BorderRadius.circular(8),
+          ),
+          child: _streamLog.isEmpty
+              ? const Text('(no events yet)')
+              : ListView(
+                  children: _streamLog
+                      .take(20)
+                      .map((line) => Text(line,
+                          style: const TextStyle(
+                              fontFamily: 'monospace', fontSize: 12)))
+                      .toList(),
+                ),
+        ),
+      ],
     );
   }
 
@@ -1437,7 +1456,26 @@ class _FfiPageState extends State<FfiPage> {
             ),
           ),
           const SizedBox(height: 32),
-          _step(context, 3, 'Does a token saved under 2.x still work?'),
+          _step(context, 3, 'Live streams'),
+          const SizedBox(height: 8),
+          Text(
+            'The two streams work differently here. Switching keyboard is '
+            'pushed — macOS posts a notification, so the log updates the '
+            'instant you switch. Caps Lock is polled every 50ms, which is what '
+            'makes it work without Accessibility permission.',
+            style: TextStyle(fontSize: 12, color: Colors.grey[700]),
+          ),
+          const SizedBox(height: 12),
+          _liveStreamsSection(
+            subscribedLabel: 'subscribed',
+            unsubscribedLabel: 'unsubscribed — no observer, no timer',
+            hint: 'Press Caps Lock, then switch keyboard from the menu bar. '
+                'Both must appear below, and neither may repeat a value it '
+                'just reported — macOS posts the input-source notification '
+                'twice for one switch.',
+          ),
+          const SizedBox(height: 32),
+          _step(context, 4, 'Does a token saved under 2.x still work?'),
           const SizedBox(height: 8),
           _tokenCompatibilitySection(context),
           const SizedBox(height: 32),

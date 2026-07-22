@@ -97,4 +97,14 @@ class TextInputSources {
   /// for why this is dereferenced.
   late final CFRef propertyInputSourceLanguages =
       _lib.lookup<CFRef>('kTISPropertyInputSourceLanguages').value;
+
+  /// `kTISNotifySelectedKeyboardInputSourceChanged` — the distributed
+  /// notification macOS posts when the user switches keyboard.
+  ///
+  /// Another data symbol holding a `CFStringRef`, dereferenced for the same
+  /// reason as [propertyInputSourceId]. Registering with the undereferenced
+  /// pointer as the name subscribes to a notification nothing ever posts, which
+  /// looks exactly like a system that simply never fires.
+  late final CFRef notifySelectedKeyboardInputSourceChanged =
+      _lib.lookup<CFRef>('kTISNotifySelectedKeyboardInputSourceChanged').value;
 }

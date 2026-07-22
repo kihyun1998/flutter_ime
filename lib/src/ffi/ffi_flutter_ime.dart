@@ -7,6 +7,7 @@ import 'dart:io';
 import 'package:flutter/foundation.dart';
 
 import '../../flutter_ime_method_channel.dart';
+import '../change_stream.dart';
 import '../value_poller.dart';
 import '../../flutter_ime_platform_interface.dart';
 import 'macos_ime.dart';
@@ -25,9 +26,9 @@ import 'windows_ime.dart';
 /// **Operations not ported yet fall through to the native plugin** rather than
 /// throwing. That is what makes this safe to install at any point during the
 /// migration: a half-ported instance behaves like a whole one, so installing it
-/// can never break an operation that already worked. Windows is fully ported;
-/// macOS has only the two English-keyboard operations so far and falls through
-/// for the rest.
+/// can never break an operation that already worked. Both platforms are now
+/// fully ported; what still falls through is `disableIME` and `enableIME` on
+/// macOS, which macOS never supported in the first place.
 ///
 /// This matters more than it looks. An earlier version threw for unported
 /// operations, and installing it mid-session crashed the example app: page
@@ -62,8 +63,8 @@ class FfiFlutterIme extends FlutterImePlatform {
 
   final WindowsIme? _windowsIme;
 
-  /// Null off macOS. Only the two English-keyboard operations are ported here
-  /// so far; everything else on macOS still falls through.
+  /// Null off macOS. Covers everything macOS supports; only `disableIME` and
+  /// `enableIME` still fall through, and those were never supported here.
   final MacosIme? _macosIme;
 
   /// Handles everything not yet reachable through FFI.
@@ -80,6 +81,10 @@ class FfiFlutterIme extends FlutterImePlatform {
 
   ValuePoller<bool>? _inputSourcePoller;
   ValuePoller<bool>? _capsLockPoller;
+
+  /// The macOS input-source stream. Notification-driven, so it has no interval
+  /// and is not a [ValuePoller].
+  ChangeStream<bool>? _inputSourceChanges;
 
   /// Resolves the target window and describes it, or returns null where there
   /// is no FFI implementation yet.
@@ -233,11 +238,16 @@ class FfiFlutterIme extends FlutterImePlatform {
   }
 
   /// Whether Caps Lock is currently on.
+  ///
+  /// **Differs from 2.x on macOS**, where this now reads hardware modifier
+  /// state rather than watching for modifier-key events. See `CoreGraphics`.
   @override
   Future<bool> isCapsLockOn() async {
-    final ime = _windowsIme;
-    if (ime == null) return _fallback.isCapsLockOn();
-    return ime.isCapsLockOn();
+    final windows = _windowsIme;
+    if (windows != null) return windows.isCapsLockOn();
+    final macos = _macosIme;
+    if (macos != null) return macos.isCapsLockOn();
+    return _fallback.isCapsLockOn();
   }
 
   /// Emits when the keyboard switches between English and non-English.
@@ -248,29 +258,53 @@ class FfiFlutterIme extends FlutterImePlatform {
   /// value actually changes, which is what "emits when the input source
   /// changes" always claimed.
   ///
-  /// Driven by polling rather than by window messages, for the reason given on
-  /// [ValuePoller]. Nothing is polled until something listens.
+  /// **The two platforms learn about the change differently, and macOS has the
+  /// better end of it.** Windows polls, because a window procedure has to
+  /// return a value synchronously and no Dart FFI callback can — see
+  /// [ValuePoller]. macOS is told: it posts a distributed notification whose
+  /// observer returns nothing, which a listener callable bridges exactly, so
+  /// delivery there is immediate rather than up to one poll interval late.
+  ///
+  /// Nothing runs on either platform until something listens.
   @override
   Stream<bool> get onInputSourceChanged {
-    final ime = _windowsIme;
-    if (ime == null) return _fallback.onInputSourceChanged;
-    return (_inputSourcePoller ??= ValuePoller<bool>(
-      read: ime.readEnglishStateOrNull,
-      interval: _pollInterval,
-    ))
-        .stream;
+    final windows = _windowsIme;
+    if (windows != null) {
+      return (_inputSourcePoller ??= ValuePoller<bool>(
+        read: windows.readEnglishStateOrNull,
+        interval: _pollInterval,
+      ))
+          .stream;
+    }
+    final macos = _macosIme;
+    if (macos != null) {
+      return (_inputSourceChanges ??= ChangeStream<bool>(
+        read: macos.readEnglishStateOrNull,
+        start: macos.startInputSourceNotifications,
+        stop: macos.stopInputSourceNotifications,
+      ))
+          .stream;
+    }
+    return _fallback.onInputSourceChanged;
   }
 
   /// Emits when Caps Lock is toggled.
   ///
   /// The state current when a listener attaches is not emitted; use
   /// [isCapsLockOn] for that. Nothing is polled until something listens.
+  ///
+  /// Polled on both platforms. macOS has a push mechanism for this too — a
+  /// global event monitor — but it needs a permission this package never
+  /// requested, so swapping it for a poll of hardware state is an improvement
+  /// rather than the downgrade that dropping push delivery usually is. See
+  /// `CoreGraphics` for the detail.
   @override
   Stream<bool> get onCapsLockChanged {
-    final ime = _windowsIme;
-    if (ime == null) return _fallback.onCapsLockChanged;
+    final windows = _windowsIme;
+    final macos = _macosIme;
+    if (windows == null && macos == null) return _fallback.onCapsLockChanged;
     return (_capsLockPoller ??= ValuePoller<bool>(
-      read: ime.isCapsLockOn,
+      read: windows != null ? windows.isCapsLockOn : macos!.isCapsLockOn,
       interval: _pollInterval,
     ))
         .stream;
