@@ -3,57 +3,65 @@
 /// Web is the case that matters. A `dart:ffi` import anywhere in the reachable
 /// library graph fails the web compile outright — verified against this
 /// package, where `dart:io` compiles fine for web but `dart:ffi` does not. The
-/// conditional import in `flutter_ime_ffi.dart` selects this file instead, so
-/// a consumer building for web keeps working.
+/// conditional import in `flutter_ime_platform_interface.dart` selects this
+/// file instead, so a consumer building for web keeps working.
 ///
-/// Mirrors the real implementation's shape: nothing is ported here, so every
-/// call falls through to the native plugin exactly as it does on a platform the
-/// FFI implementation does not cover yet. Nothing constructs this in practice —
-/// the platform gating in the public API short-circuits first.
+/// **Constructing it is safe; calling it is not.** It is the default instance
+/// on web, so it is built on startup whether or not anything uses it. Nothing
+/// ever calls it: every public function in `flutter_ime.dart` consults the
+/// platform-support policy first, and web is not a supported platform.
+/// Throwing rather than quietly returning a default keeps that a fact rather
+/// than a hope — if the gating ever regresses, the web build says so instead of
+/// silently reporting that no keyboard is English.
+///
+/// The throws are **synchronous**, which is why none of these are `async`. An
+/// `async` method that throws hands back a failed future, and every one of
+/// these is routinely called fire-and-forget from a focus listener — so the
+/// failure would surface as an unhandled async error in the consumer's zone,
+/// far from the call, rather than at the line that made it. This is the one
+/// place in the package that raises at all, so it may as well raise where
+/// somebody can see it.
 library;
 
-import '../../flutter_ime_method_channel.dart';
 import '../../flutter_ime_platform_interface.dart';
 
 /// Web-safe stand-in that mirrors the real implementation's surface.
 class FfiFlutterIme extends FlutterImePlatform {
-  FfiFlutterIme({FlutterImePlatform? fallback})
-      : _fallback = fallback ?? MethodChannelFlutterIme();
+  FfiFlutterIme();
 
-  final FlutterImePlatform _fallback;
-
-  /// Always null here; the real implementation reports the resolved window.
-  String? describeResolvedWindow() => null;
-
-  /// Always null here; the real implementation reports the selected macOS
-  /// input source.
-  String? describeCurrentInputSource() => null;
+  Never _unsupported(String operation) => throw UnsupportedError(
+        'flutter_ime cannot reach an IME on this platform, so $operation has '
+        'no implementation here. Reaching this means the platform gating in '
+        'flutter_ime.dart was bypassed — call the top-level functions rather '
+        'than the platform interface.',
+      );
 
   @override
-  Future<void> setEnglishKeyboard() => _fallback.setEnglishKeyboard();
+  Future<void> setEnglishKeyboard() => _unsupported('setEnglishKeyboard');
 
   @override
-  Future<bool> isEnglishKeyboard() => _fallback.isEnglishKeyboard();
+  Future<bool> isEnglishKeyboard() => _unsupported('isEnglishKeyboard');
 
   @override
-  Future<String?> getCurrentInputSource() => _fallback.getCurrentInputSource();
+  Future<String?> getCurrentInputSource() =>
+      _unsupported('getCurrentInputSource');
 
   @override
   Future<void> setInputSource(String sourceId) =>
-      _fallback.setInputSource(sourceId);
+      _unsupported('setInputSource');
 
   @override
-  Future<void> disableIME() => _fallback.disableIME();
+  Future<void> disableIME() => _unsupported('disableIME');
 
   @override
-  Future<void> enableIME() => _fallback.enableIME();
+  Future<void> enableIME() => _unsupported('enableIME');
 
   @override
-  Future<bool> isCapsLockOn() => _fallback.isCapsLockOn();
+  Future<bool> isCapsLockOn() => _unsupported('isCapsLockOn');
 
   @override
-  Stream<bool> get onInputSourceChanged => _fallback.onInputSourceChanged;
+  Stream<bool> get onInputSourceChanged => _unsupported('onInputSourceChanged');
 
   @override
-  Stream<bool> get onCapsLockChanged => _fallback.onCapsLockChanged;
+  Stream<bool> get onCapsLockChanged => _unsupported('onCapsLockChanged');
 }

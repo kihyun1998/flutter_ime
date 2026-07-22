@@ -2,44 +2,21 @@ import Cocoa
 import FlutterMacOS
 import XCTest
 
-
-@testable import flutter_ime
-
-// This demonstrates a simple unit test of the Swift portion of this plugin's implementation.
+// There is no longer anything native to test.
 //
-// See https://developer.apple.com/documentation/xctest for more information about using XCTest.
-
+// This file used to unit-test the plugin's Swift classification helpers through
+// `@testable import flutter_ime`. As of 3.0.0 flutter_ime is a pure Dart
+// package with no Swift in it at all, and what this covered now lives in the
+// Dart suite — `test/english_input_source_test.dart` for the classification and
+// `test/change_stream_test.dart` for the change rules — where it runs under
+// `dart test` on any host instead of needing Xcode and a macOS runner.
+//
+// The target itself is left in place rather than unpicked from the Xcode
+// project by hand: it is woven through thirty-odd references in project.pbxproj,
+// and a mistake there breaks the example app's build for everyone. An empty
+// target costs nothing and is honest about there being nothing left to run.
+// Deliberately empty. A placeholder assertion would be ceremony: no CI job runs
+// this target any more, so it would never execute and would only look like
+// coverage to anyone reading the file list.
 class RunnerTests: XCTestCase {
-
-  func testGetPlatformVersion() {
-    let plugin = FlutterImePlugin()
-
-    let call = FlutterMethodCall(methodName: "getPlatformVersion", arguments: [])
-
-    let resultExpectation = expectation(description: "result block must be called.")
-    plugin.handle(call) { result in
-      XCTAssertEqual(result as! String,
-                     "macOS " + ProcessInfo.processInfo.operatingSystemVersionString)
-      resultExpectation.fulfill()
-    }
-    waitForExpectations(timeout: 1)
-  }
-
-  // The ABC and US layouts are English; other input sources (e.g. Korean) are
-  // not. Expected values come from the domain, not the implementation.
-  func testEnglishInputSourceIdClassification() {
-    XCTAssertTrue(isEnglishInputSourceId("com.apple.keylayout.ABC"))
-    XCTAssertTrue(isEnglishInputSourceId("com.apple.keylayout.US"))
-    XCTAssertFalse(
-      isEnglishInputSourceId("com.apple.inputmethod.Korean.2SetKorean"))
-  }
-
-  // A Caps Lock change is emitted only when the state flips.
-  func testCapsLockDidChangeOnlyOnFlip() {
-    XCTAssertTrue(capsLockDidChange(current: true, last: false))
-    XCTAssertTrue(capsLockDidChange(current: false, last: true))
-    XCTAssertFalse(capsLockDidChange(current: true, last: true))
-    XCTAssertFalse(capsLockDidChange(current: false, last: false))
-  }
-
 }

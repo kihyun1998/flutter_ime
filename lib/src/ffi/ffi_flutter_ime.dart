@@ -1,82 +1,70 @@
-/// The FFI-backed platform implementation, selected on platforms that have
-/// `dart:ffi`.
+/// The platform implementation, selected on platforms that have `dart:ffi`.
 library;
 
 import 'dart:io';
 
-import 'package:flutter/foundation.dart';
+import 'package:meta/meta.dart';
 
-import '../../flutter_ime_method_channel.dart';
+import '../../flutter_ime_platform_interface.dart';
 import '../change_stream.dart';
 import '../value_poller.dart';
-import '../../flutter_ime_platform_interface.dart';
 import 'macos_ime.dart';
 import 'windows_ime.dart';
 
 /// Calls the operating system directly through `dart:ffi`, with no platform
 /// channel and no native plugin code.
 ///
-/// While the migration is in progress this is opt-in: the native plugin is
-/// still registered and still the default. Assign it explicitly to try it:
+/// This is the default and only implementation as of 3.0.0. Until then it was
+/// opt-in beside a native plugin, and every operation it had not yet ported
+/// fell through to that plugin. Both the plugin and the fall-through are gone;
+/// what an unsupported platform gets now is the documented default, not a
+/// second implementation.
 ///
-/// ```dart
-/// FlutterImePlatform.instance = FfiFlutterIme();
-/// ```
-///
-/// **Operations not ported yet fall through to the native plugin** rather than
-/// throwing. That is what makes this safe to install at any point during the
-/// migration: a half-ported instance behaves like a whole one, so installing it
-/// can never break an operation that already worked. Both platforms are now
-/// fully ported; what still falls through is `disableIME` and `enableIME` on
-/// macOS, which macOS never supported in the first place.
-///
-/// This matters more than it looks. An earlier version threw for unported
-/// operations, and installing it mid-session crashed the example app: page
-/// transitions run the incoming page's `initState` before the outgoing page's
-/// `dispose`, so an unported operation was reached through an instance that was
-/// supposed to have been uninstalled already.
-///
-/// The fallback disappears along with the native plugin once every operation is
-/// ported.
+/// **Off Windows and macOS every operation is a no-op.** In practice nothing
+/// reaches here on those platforms — the gating in `flutter_ime.dart`
+/// short-circuits first — but this holds the line on its own rather than
+/// relying on a caller to. A backend that is null is a platform with no IME to
+/// talk to, and the documented answer there is that nothing happened.
 class FfiFlutterIme extends FlutterImePlatform {
-  FfiFlutterIme({FlutterImePlatform? fallback})
+  FfiFlutterIme()
       : _windowsIme = Platform.isWindows ? WindowsIme() : null,
-        _macosIme = Platform.isMacOS ? MacosIme() : null,
-        _fallback = fallback ?? MethodChannelFlutterIme();
+        _macosIme = Platform.isMacOS ? MacosIme() : null;
 
   /// Builds an instance with the backends given, doing no platform detection
   /// of its own.
   ///
   /// Tests use this so that what they exercise does not depend on the host they
-  /// run on. The default constructor picks a backend from [Platform], which in a
-  /// test means the real one — a `flutter test` run on a Mac would then switch
-  /// the developer's keyboard layout, and one on Windows would reach into
-  /// whatever window happened to be focused.
+  /// run on. The default constructor picks a backend from [Platform], which in
+  /// a test means the real one — a test run on a Mac would then switch the
+  /// developer's keyboard layout, and one on Windows would reach into whatever
+  /// window happened to be focused.
   @visibleForTesting
-  FfiFlutterIme.withBackends({
-    WindowsIme? windowsIme,
-    MacosIme? macosIme,
-    FlutterImePlatform? fallback,
-  })  : _windowsIme = windowsIme,
-        _macosIme = macosIme,
-        _fallback = fallback ?? MethodChannelFlutterIme();
+  FfiFlutterIme.withBackends({WindowsIme? windowsIme, MacosIme? macosIme})
+      : _windowsIme = windowsIme,
+        _macosIme = macosIme;
 
+  /// Null off Windows.
   final WindowsIme? _windowsIme;
 
-  /// Null off macOS. Covers everything macOS supports; only `disableIME` and
-  /// `enableIME` still fall through, and those were never supported here.
+  /// Null off macOS. Covers everything macOS supports; [disableIME] and
+  /// [enableIME] are unsupported there and always have been.
   final MacosIme? _macosIme;
 
-  /// Handles everything not yet reachable through FFI.
-  final FlutterImePlatform _fallback;
+  // Every operation below dispatches the same way: try Windows, then macOS,
+  // then give the documented default. One backend is always null in practice,
+  // but the shape is uniform on purpose. Written as a `??` chain over the
+  // *results* it would read as "first non-null answer wins", which is wrong
+  // wherever null is itself an answer — `getCurrentInputSource` returns null
+  // for a keyboard it could not read, and a chain would carry on into the
+  // other backend rather than reporting it.
 
   /// How often the polled streams re-read their value.
   ///
   /// Deliberately not configurable: the public API should not grow a knob for
   /// it. Chosen so that reverting an unwanted keyboard switch feels immediate —
   /// the "force English" recipe in the README reacts to these events, and a
-  /// slower poll would let a character or two through first. Two cheap Win32
-  /// reads at this rate cost nothing measurable.
+  /// slower poll would let a character or two through first. Two cheap reads at
+  /// this rate cost nothing measurable.
   static const Duration _pollInterval = Duration(milliseconds: 50);
 
   ValuePoller<bool>? _inputSourcePoller;
@@ -85,31 +73,6 @@ class FfiFlutterIme extends FlutterImePlatform {
   /// The macOS input-source stream. Notification-driven, so it has no interval
   /// and is not a [ValuePoller].
   ChangeStream<bool>? _inputSourceChanges;
-
-  /// Resolves the target window and describes it, or returns null where there
-  /// is no FFI implementation yet.
-  ///
-  /// A method, not a getter: on a cache miss this walks the process's window
-  /// tree. Call it deliberately — not from a `build`.
-  ///
-  /// Deliberately returns a string rather than a structured type. It crosses
-  /// the conditional-import boundary, and the web stub cannot name a type that
-  /// depends on `dart:ffi`. Intended for diagnostics in the example app.
-  String? describeResolvedWindow() => _windowsIme?.resolveWindow().toString();
-
-  /// Describes the selected macOS input source — its identifier and the
-  /// languages it types — or null where that is not an FFI operation.
-  ///
-  /// A string for the same reason as [describeResolvedWindow]: it crosses the
-  /// conditional-import boundary, and the web stub cannot name a type that
-  /// depends on `dart:ffi`. Intended for diagnostics in the example app, where
-  /// it shows why [isEnglishKeyboard] answered the way it did.
-  String? describeCurrentInputSource() =>
-      _macosIme?.describeCurrentInputSource();
-
-  // -------------------------------------------------------------------------
-  // Ported to FFI
-  // -------------------------------------------------------------------------
 
   /// Switches the keyboard to English: alphanumeric conversion mode on
   /// Windows, the ABC layout on macOS.
@@ -130,12 +93,7 @@ class FfiFlutterIme extends FlutterImePlatform {
       windows.setEnglishKeyboard();
       return;
     }
-    final macos = _macosIme;
-    if (macos != null) {
-      macos.setEnglishKeyboard();
-      return;
-    }
-    return _fallback.setEnglishKeyboard();
+    _macosIme?.setEnglishKeyboard();
   }
 
   /// Whether the keyboard is currently English.
@@ -148,8 +106,8 @@ class FfiFlutterIme extends FlutterImePlatform {
   ///
   /// Returns false when the answer cannot be read: on Windows when the target
   /// window or its IME context cannot be reached — including after
-  /// `disableIME()`, which leaves no context to read — and on macOS when there
-  /// is no readable current input source.
+  /// [disableIME], which leaves no context to read — and on macOS when there is
+  /// no readable current input source.
   ///
   /// **The macOS answer differs from 2.x** for every English layout that is not
   /// ABC or US. `isEnglishInputSource` records why.
@@ -157,9 +115,7 @@ class FfiFlutterIme extends FlutterImePlatform {
   Future<bool> isEnglishKeyboard() async {
     final windows = _windowsIme;
     if (windows != null) return windows.isEnglishKeyboard();
-    final macos = _macosIme;
-    if (macos != null) return macos.isEnglishKeyboard();
-    return _fallback.isEnglishKeyboard();
+    return _macosIme?.isEnglishKeyboard() ?? false;
   }
 
   /// Reads the current keyboard as an opaque token.
@@ -172,9 +128,7 @@ class FfiFlutterIme extends FlutterImePlatform {
   Future<String?> getCurrentInputSource() async {
     final windows = _windowsIme;
     if (windows != null) return windows.getCurrentInputSource();
-    final macos = _macosIme;
-    if (macos != null) return macos.getCurrentInputSource();
-    return _fallback.getCurrentInputSource();
+    return _macosIme?.getCurrentInputSource();
   }
 
   /// Restores a keyboard from a token previously returned by
@@ -198,15 +152,12 @@ class FfiFlutterIme extends FlutterImePlatform {
       windows.setInputSource(sourceId);
       return;
     }
-    final macos = _macosIme;
-    if (macos != null) {
-      macos.setInputSource(sourceId);
-      return;
-    }
-    return _fallback.setInputSource(sourceId);
+    _macosIme?.setInputSource(sourceId);
   }
 
   /// Disables the IME so composition cannot start in the app window.
+  ///
+  /// Windows only; a no-op on macOS, as in 2.x.
   ///
   /// Detaching the IME context is the entire mechanism; the native plugin's
   /// window-procedure message filter is deliberately not reproduced, because a
@@ -220,21 +171,17 @@ class FfiFlutterIme extends FlutterImePlatform {
   /// [setEnglishKeyboard].
   @override
   Future<void> disableIME() async {
-    final ime = _windowsIme;
-    if (ime == null) return _fallback.disableIME();
-    ime.disableIme();
+    _windowsIme?.disableIme();
   }
 
-  /// Restores normal IME functionality after [disableIME].
+  /// Restores normal IME functionality after [disableIME]. Windows only.
   ///
   /// Does nothing if the target window cannot be resolved, and — like
   /// [disableIME] — reports that by staying silent rather than raising, where
   /// 2.x raised a `PlatformException`.
   @override
   Future<void> enableIME() async {
-    final ime = _windowsIme;
-    if (ime == null) return _fallback.enableIME();
-    ime.enableIme();
+    _windowsIme?.enableIme();
   }
 
   /// Whether Caps Lock is currently on.
@@ -245,9 +192,7 @@ class FfiFlutterIme extends FlutterImePlatform {
   Future<bool> isCapsLockOn() async {
     final windows = _windowsIme;
     if (windows != null) return windows.isCapsLockOn();
-    final macos = _macosIme;
-    if (macos != null) return macos.isCapsLockOn();
-    return _fallback.isCapsLockOn();
+    return _macosIme?.isCapsLockOn() ?? false;
   }
 
   /// Emits when the keyboard switches between English and non-English.
@@ -285,7 +230,7 @@ class FfiFlutterIme extends FlutterImePlatform {
       ))
           .stream;
     }
-    return _fallback.onInputSourceChanged;
+    return const Stream<bool>.empty();
   }
 
   /// Emits when Caps Lock is toggled.
@@ -302,7 +247,7 @@ class FfiFlutterIme extends FlutterImePlatform {
   Stream<bool> get onCapsLockChanged {
     final windows = _windowsIme;
     final macos = _macosIme;
-    if (windows == null && macos == null) return _fallback.onCapsLockChanged;
+    if (windows == null && macos == null) return const Stream<bool>.empty();
     return (_capsLockPoller ??= ValuePoller<bool>(
       read: windows != null ? windows.isCapsLockOn : macos!.isCapsLockOn,
       interval: _pollInterval,

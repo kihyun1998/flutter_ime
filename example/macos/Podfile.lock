@@ -1,20 +1,14 @@
 PODS:
-  - flutter_ime (0.0.1):
-    - FlutterMacOS
   - FlutterMacOS (1.0.0)
 
 DEPENDENCIES:
-  - flutter_ime (from `Flutter/ephemeral/.symlinks/plugins/flutter_ime/macos`)
   - FlutterMacOS (from `Flutter/ephemeral`)
 
 EXTERNAL SOURCES:
-  flutter_ime:
-    :path: Flutter/ephemeral/.symlinks/plugins/flutter_ime/macos
   FlutterMacOS:
     :path: Flutter/ephemeral
 
 SPEC CHECKSUMS:
-  flutter_ime: e4eaa823d2c90adc83f6ff765117ad94ae2c6803
   FlutterMacOS: d0db08ddef1a9af05a5ec4b724367152bb0500b1
 
 PODFILE CHECKSUM: 9ebaf0ce3d369aaa26a9ea0e159195ed94724cf3

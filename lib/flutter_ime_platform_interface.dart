@@ -1,13 +1,25 @@
 import 'package:plugin_platform_interface/plugin_platform_interface.dart';
 
-import 'flutter_ime_method_channel.dart';
+// The conditional import keeps `dart:ffi` out of the library graph on web,
+// where importing it fails the build outright. The stub it selects there is
+// never reached: the platform gating in `flutter_ime.dart` short-circuits
+// first.
+import 'src/ffi/ffi_flutter_ime_stub.dart'
+    if (dart.library.ffi) 'src/ffi/ffi_flutter_ime.dart';
 
-/// Platform interface for Flutter IME plugin.
+/// Platform interface for Flutter IME.
 abstract class FlutterImePlatform extends PlatformInterface {
   FlutterImePlatform() : super(token: _token);
 
   static final Object _token = Object();
-  static FlutterImePlatform _instance = MethodChannelFlutterIme();
+
+  /// The FFI implementation, which calls the operating system directly.
+  ///
+  /// There is no longer a platform channel or any native plugin code behind
+  /// this. Until 3.0.0 the default was a method-channel implementation and the
+  /// FFI one had to be installed by hand; both halves of that arrangement are
+  /// gone.
+  static FlutterImePlatform _instance = FfiFlutterIme();
 
   /// Returns the default instance.
   static FlutterImePlatform get instance => _instance;

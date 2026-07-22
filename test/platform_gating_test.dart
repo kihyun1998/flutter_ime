@@ -1,7 +1,7 @@
 import 'package:flutter_ime/flutter_ime.dart';
 import 'package:flutter_ime/flutter_ime_platform_interface.dart';
 import 'package:flutter_ime/src/platform_support.dart';
-import 'package:flutter_test/flutter_test.dart';
+import 'package:test/test.dart';
 
 import 'support/mock_flutter_ime_platform.dart';
 

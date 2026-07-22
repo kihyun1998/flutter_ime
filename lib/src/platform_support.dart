@@ -1,6 +1,6 @@
 import 'dart:io';
 
-import 'package:flutter/foundation.dart';
+import 'package:meta/meta.dart';
 
 /// Single source of truth for which platforms the plugin supports.
 ///

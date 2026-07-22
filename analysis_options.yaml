@@ -1,4 +1,7 @@
-include: package:flutter_lints/flutter.yaml
+# `lints` rather than `flutter_lints`: this is a plain Dart package now, and
+# flutter_lints would drag the Flutter SDK back into the dependency graph that
+# 3.0.0 exists to remove.
+include: package:lints/recommended.yaml
 
 # Additional information about this file can be found at
 # https://dart.dev/guides/language/analysis-options

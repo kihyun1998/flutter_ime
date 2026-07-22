@@ -8,7 +8,7 @@ import 'dart:ffi';
 
 import 'package:flutter_ime/src/ffi/win32.dart';
 import 'package:flutter_ime/src/ffi/window_resolver.dart';
-import 'package:flutter_test/flutter_test.dart';
+import 'package:test/test.dart';
 
 /// Stand-in handles. Only their identity matters; nothing dereferences them.
 Handle32 handle(int address) => Pointer<Void>.fromAddress(address);

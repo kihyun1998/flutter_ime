@@ -1,5 +1,5 @@
 name: flutter_ime
-description: "A Flutter plugin for controlling IME (Input Method Editor) state. Switch to English keyboard, detect input source changes, and monitor Caps Lock state on Windows and macOS."
+description: "Control IME (Input Method Editor) state from Dart. Switch to an English keyboard, detect input source changes, and monitor Caps Lock on Windows and macOS — with no native code and no build step."
 version: 2.1.4
 homepage: "https://github.com/kihyun1998/flutter_ime"
 repository: https://github.com/kihyun1998/flutter_ime
@@ -17,25 +17,34 @@ environment:
   # with deliveries already queued — and a listener callable that is never
   # closed would otherwise hold the isolate open forever, so a plain Dart CLI
   # using this package could not exit. Nothing else in the package needs 3.4.
+  #
+  # No `flutter` constraint. Declaring one would make Flutter a requirement for
+  # anyone resolving this package, which is exactly what this version removes.
   sdk: ">=3.4.0 <4.0.0"
-  flutter: ">=3.3.0"
+
+# Declared rather than inferred.
+#
+# Windows and macOS do the work. Web is listed because "adding this package does
+# not break your web build" is a promise worth making — it imports `dart:ffi`,
+# which does not exist there, and the conditional import that keeps the build
+# green is a feature rather than an accident.
+#
+# Android, iOS and Linux are deliberately absent. The package is *safe* on them
+# — every function short-circuits in the gating layer and returns its documented
+# default — but safe is not supported, and a reader scanning pub.dev takes these
+# for a capability list. Someone looking for an Android IME package should not
+# find this one.
+platforms:
+  macos:
+  web:
+  windows:
 
 dependencies:
-  flutter:
-    sdk: flutter
   ffi: ^2.1.0
+  meta: ^1.9.0
   plugin_platform_interface: ^2.0.2
 
 dev_dependencies:
   fake_async: ^1.3.1
-  flutter_test:
-    sdk: flutter
-  flutter_lints: ^4.0.0
-
-flutter:
-  plugin:
-    platforms:
-      windows:
-        pluginClass: FlutterImePluginCApi
-      macos:
-        pluginClass: FlutterImePlugin
+  lints: ^4.0.0
+  test: ^1.24.0

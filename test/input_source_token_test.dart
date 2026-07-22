@@ -9,7 +9,7 @@
 library;
 
 import 'package:flutter_ime/src/input_source_token.dart';
-import 'package:flutter_test/flutter_test.dart';
+import 'package:test/test.dart';
 
 void main() {
   group('parseInputSourceToken', () {

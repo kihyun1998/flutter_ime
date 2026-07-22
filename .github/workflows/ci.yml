@@ -10,8 +10,91 @@ env:
   FLUTTER_VERSION: "3.41.9"
 
 jobs:
+  # The package itself. No Flutter: flutter_ime is a plain Dart package as of
+  # 3.0.0, and running its own suite through Flutter would hide a dependency on
+  # it creeping back in.
   dart:
     name: Dart
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v5
+
+      - uses: dart-lang/setup-dart@v1
+
+      - run: dart --version
+
+      - name: Install dependencies
+        run: dart pub get
+
+      # Everything, including the example. Formatting needs no resolved
+      # dependencies, so the example is checked here rather than in the jobs
+      # that have Flutter.
+      - name: Format check
+        run: dart format --output=none --set-exit-if-changed .
+
+      - name: Analyze
+        run: dart analyze
+
+      - name: Test
+        run: dart test
+
+  # A consumer that has no Flutter at all must be able to resolve, analyse and
+  # run against this package. That is a headline promise of 3.0.0 and nothing
+  # else in CI would notice it breaking — the suite above passes just as well
+  # with a Flutter dependency present.
+  plain-dart-consumer:
+    name: Plain Dart consumer
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v5
+        with:
+          path: flutter_ime
+
+      - uses: dart-lang/setup-dart@v1
+
+      - name: Build a consumer that depends on the package by path
+        run: |
+          mkdir -p consumer/bin
+          cat > consumer/pubspec.yaml <<'EOF'
+          name: plain_dart_consumer
+          publish_to: none
+          environment:
+            sdk: ">=3.4.0 <4.0.0"
+          dependencies:
+            flutter_ime:
+              path: ../flutter_ime
+          EOF
+          cat > consumer/bin/main.dart <<'EOF'
+          import 'package:flutter_ime/flutter_ime.dart';
+
+          Future<void> main() async {
+            // Linux, so every call takes the gating path and returns its
+            // documented default. Reaching the end without throwing is the
+            // assertion.
+            await setEnglishKeyboard();
+            await isEnglishKeyboard();
+            await getCurrentInputSource();
+            await setInputSource('anything');
+            await disableIME();
+            await enableIME();
+            await isCapsLockOn();
+            print('ok');
+          }
+          EOF
+
+      - name: Resolve, analyse and run
+        working-directory: consumer
+        run: |
+          dart pub get
+          dart analyze
+          dart run bin/main.dart
+
+  # The example app is a Flutter app, so these jobs do need Flutter. They are
+  # smoke tests: the package contributes no native build step any more, so what
+  # is being checked is that a consumer app still builds with it in the
+  # dependency graph.
+  example-web:
+    name: Example (web)
     runs-on: ubuntu-latest
     steps:
       - uses: actions/checkout@v5
@@ -22,31 +105,17 @@ jobs:
           channel: stable
           cache: true
 
-      - run: flutter --version
-
-      - name: Install dependencies
-        run: flutter pub get
-
-      - name: Format check
-        run: dart format --output=none --set-exit-if-changed .
-
-      - name: Analyze
-        run: flutter analyze
-
-      - name: Test
-        run: flutter test
-
-      # The package must stay importable from an app that also targets web.
-      # `dart:ffi` does not exist there, so a stray unconditional import would
-      # break every such consumer's build — and nothing else in CI would catch
-      # it. Building the example exercises the real conditional import, since
-      # the example imports the FFI entry point.
+      # `dart:ffi` does not exist on web, so a stray unconditional import would
+      # break every consumer who also targets web — and nothing else here would
+      # catch it. Building the example exercises the real conditional import.
       - name: Build example for web
         working-directory: example
-        run: flutter build web
+        run: |
+          flutter pub get
+          flutter build web
 
-  windows:
-    name: Windows
+  example-windows:
+    name: Example (Windows)
     runs-on: windows-latest
     steps:
       - uses: actions/checkout@v5
@@ -57,27 +126,14 @@ jobs:
           channel: stable
           cache: true
 
-      # The gtest harness compiles the managers + method dispatch, which link the
-      # Flutter C++ client wrapper from the cached Windows engine artifacts.
-      - name: Precache Windows engine artifacts
-        run: flutter precache --windows
-
-      # Unit-test the plugin's pure logic and method-call dispatch via the
-      # standalone GoogleTest harness.
-      - name: Build and run C++ unit tests
-        run: |
-          cmake -S windows/test -B build/win-test -G "Visual Studio 17 2022" -A x64
-          cmake --build build/win-test --config Debug
-          ctest --test-dir build/win-test -C Debug --output-on-failure
-
-      # Building the example compiles and links the full C++ plugin (managers,
-      # WndProc subclass hook, IMM32/comctl32 usage).
       - name: Build example (Windows)
         working-directory: example
-        run: flutter build windows --debug
+        run: |
+          flutter pub get
+          flutter build windows --debug
 
-  macos:
-    name: macOS
+  example-macos:
+    name: Example (macOS)
     runs-on: macos-latest
     steps:
       - uses: actions/checkout@v5
@@ -88,20 +144,8 @@ jobs:
           channel: stable
           cache: true
 
-      # Building the example compiles the Swift managers (InputSourceManager /
-      # CapsLockManager). Must run before xcodebuild so the generated
-      # Flutter/ephemeral files exist.
       - name: Build example (macOS)
         working-directory: example
-        run: flutter build macos --debug
-
-      # Run the XCTest target (RunnerTests), which unit-tests the pure Swift
-      # classification helpers via `@testable import flutter_ime`.
-      - name: Run XCTest
-        working-directory: example
         run: |
-          xcodebuild test \
-            -workspace macos/Runner.xcworkspace \
-            -scheme Runner \
-            -destination 'platform=macOS' \
-            CODE_SIGNING_ALLOWED=NO
+          flutter pub get
+          flutter build macos --debug

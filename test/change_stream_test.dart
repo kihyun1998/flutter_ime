@@ -10,7 +10,13 @@
 library;
 
 import 'package:flutter_ime/src/change_stream.dart';
-import 'package:flutter_test/flutter_test.dart';
+import 'package:test/test.dart';
+
+/// Lets pending microtasks and events run. `package:test` has no equivalent of
+/// flutter_test's `pumpEventQueue`, and a broadcast controller delivers
+/// asynchronously, so without this the assertions run before the emissions do.
+Future<void> pumpEventQueue() =>
+    Future<void>.delayed(Duration.zero).then((_) => Future<void>.value());
 
 /// A trigger the test fires by hand, counting how often it was started and
 /// stopped. Standing in for the native observer, which cannot be registered

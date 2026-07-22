@@ -14,7 +14,7 @@
 library;
 
 import 'package:flutter_ime/src/english_input_source.dart';
-import 'package:flutter_test/flutter_test.dart';
+import 'package:test/test.dart';
 
 void main() {
   group('English layouts classify as English', () {
