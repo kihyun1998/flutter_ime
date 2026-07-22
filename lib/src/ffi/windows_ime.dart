@@ -11,6 +11,7 @@ import 'dart:ffi';
 import 'package:ffi/ffi.dart';
 
 import '../ime_conversion_mode.dart';
+import '../input_source_token.dart';
 import 'win32.dart';
 import 'window_resolver.dart';
 
@@ -58,6 +59,77 @@ class WindowsIme {
               context, imeCmodeAlphanumeric, imeSmodeNone) !=
           0) ??
       false;
+
+  /// Reads the current keyboard layout and IME conversion state as an opaque
+  /// token, or null if the layout could not be read.
+  ///
+  /// Mirrors the native plugin exactly, including its two degraded paths: a
+  /// failed layout read yields null, and a window with no IME context yields a
+  /// layout-only token rather than nothing.
+  String? getCurrentInputSource() {
+    final window = _resolver.resolve();
+    if (!window.isUsable) return null;
+
+    final klid = _readKeyboardLayoutName();
+    if (klid == null) return null;
+
+    final conversion = _withImeContext((context) {
+      final out = calloc<Uint32>(2);
+      try {
+        if (_win32.immGetConversionStatus(context, out, out + 1) == 0) {
+          return null;
+        }
+        return formatInputSourceToken(klid, out.value, (out + 1).value);
+      } finally {
+        calloc.free(out);
+      }
+    });
+
+    // No IME context, or the status read failed: the layout alone is still
+    // worth handing back, and it round-trips through setInputSource.
+    return conversion ?? klid;
+  }
+
+  /// Restores a keyboard layout, and the IME conversion state if the token
+  /// carries any. Returns false if the token is malformed or the layout could
+  /// not be loaded.
+  bool setInputSource(String sourceId) {
+    // Parse before touching the OS, so a malformed token costs nothing and can
+    // never reach a system call.
+    final token = parseInputSourceToken(sourceId);
+    if (token == null) return false;
+
+    final window = _resolver.resolve();
+    if (!window.isUsable) return false;
+
+    final klidPtr = token.klid.toNativeUtf8(allocator: calloc);
+    try {
+      if (_win32.loadKeyboardLayout(klidPtr, klfActivate) == nullptr) {
+        return false;
+      }
+    } finally {
+      calloc.free(klidPtr);
+    }
+
+    if (token.hasConversion) {
+      _withImeContext((context) => _win32.immSetConversionStatus(
+          context, token.conversion!, token.sentence!));
+    }
+    // The layout switched, which is the part that always applies. Conversion
+    // state is best-effort: a window with no IME context has none to restore.
+    return true;
+  }
+
+  /// Reads the active keyboard layout identifier, or null if unavailable.
+  String? _readKeyboardLayoutName() {
+    final buffer = calloc<Uint8>(klNameLength);
+    try {
+      if (_win32.getKeyboardLayoutName(buffer.cast<Utf8>()) == 0) return null;
+      return buffer.cast<Utf8>().toDartString();
+    } finally {
+      calloc.free(buffer);
+    }
+  }
 
   /// Whether the IME is currently in English (non-native) conversion mode.
   ///

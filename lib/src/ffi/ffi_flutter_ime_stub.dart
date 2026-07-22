@@ -27,4 +27,10 @@ class FfiFlutterIme extends FlutterImePlatform {
 
   @override
   Future<bool> isEnglishKeyboard() async => _unsupported();
+
+  @override
+  Future<String?> getCurrentInputSource() async => _unsupported();
+
+  @override
+  Future<void> setInputSource(String sourceId) async => _unsupported();
 }

@@ -745,6 +745,9 @@ class _FfiPageState extends State<FfiPage> {
   /// process's window tree on a cache miss.
   String _window = '(not resolved)';
 
+  /// The token from the last save, awaiting a restore.
+  String? _saved;
+
   @override
   void initState() {
     super.initState();
@@ -793,6 +796,29 @@ class _FfiPageState extends State<FfiPage> {
     await setEnglishKeyboard();
     final english = await isEnglishKeyboard();
     _append('while unfocused: window=$resolved  isEnglish=$english');
+  }
+
+  Future<void> _save() async {
+    final token = await getCurrentInputSource();
+    setState(() => _saved = token);
+    _append('getCurrentInputSource() -> ${token ?? "null"}');
+  }
+
+  Future<void> _restore() async {
+    final token = _saved;
+    if (token == null) return;
+    await setInputSource(token);
+    _append('setInputSource("$token") called');
+    await _check();
+  }
+
+  /// Feeds setInputSource a token it must reject. 2.1.4 fixed a crash where a
+  /// malformed token reached the numeric parser and threw across the method
+  /// channel; the app surviving this button is the point of it.
+  Future<void> _restoreMalformed() async {
+    const bad = '00000412:abc:0';
+    await setInputSource(bad);
+    _append('setInputSource("$bad") survived — rejected, no throw');
   }
 
   String _resolveAgain() {
@@ -878,7 +904,39 @@ class _FfiPageState extends State<FfiPage> {
               child: const Text('Clear'),
             ),
           ]),
-          const SizedBox(height: 12),
+          const SizedBox(height: 24),
+          Text('Save and restore',
+              style: Theme.of(context).textTheme.titleMedium),
+          const SizedBox(height: 4),
+          const Text(
+            'Save the current keyboard, switch it by hand with Han/Yeong, then '
+            'restore. The token format is unchanged from 2.x, so one saved '
+            'before upgrading still restores.',
+          ),
+          const SizedBox(height: 8),
+          SelectableText(
+            'saved token: ${_saved ?? "(nothing saved)"}',
+            style: const TextStyle(fontFamily: 'monospace', fontSize: 12),
+          ),
+          const SizedBox(height: 8),
+          Wrap(spacing: 12, runSpacing: 8, children: [
+            FilledButton.tonalIcon(
+              onPressed: _save,
+              icon: const Icon(Icons.bookmark_add_outlined),
+              label: const Text('getCurrentInputSource()'),
+            ),
+            OutlinedButton.icon(
+              onPressed: _saved == null ? null : _restore,
+              icon: const Icon(Icons.restore),
+              label: const Text('setInputSource(saved)'),
+            ),
+            OutlinedButton.icon(
+              onPressed: _restoreMalformed,
+              icon: const Icon(Icons.bug_report_outlined),
+              label: const Text('restore a malformed token'),
+            ),
+          ]),
+          const SizedBox(height: 24),
           OutlinedButton.icon(
             onPressed: _setEnglishDelayed,
             icon: const Icon(Icons.timer_outlined),

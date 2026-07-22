@@ -55,6 +55,25 @@ class FfiFlutterIme extends FlutterImePlatform {
   @override
   Future<void> setEnglishKeyboard() async => _windows.setEnglishKeyboard();
 
+  /// Reads the current keyboard as an opaque token.
+  ///
+  /// Returns null when the layout cannot be read. The token format is
+  /// byte-identical to the one 2.x produced, so a token saved before upgrading
+  /// still restores.
+  @override
+  Future<String?> getCurrentInputSource() async =>
+      _windows.getCurrentInputSource();
+
+  /// Restores a keyboard from a token previously returned by
+  /// [getCurrentInputSource].
+  ///
+  /// A malformed token is ignored rather than raised: these come back from a
+  /// consumer's own storage, and 2.1.4 fixed a crash where one reached the
+  /// numeric parser and threw.
+  @override
+  Future<void> setInputSource(String sourceId) async =>
+      _windows.setInputSource(sourceId);
+
   /// Whether the IME is in English mode.
   ///
   /// Returns false when the target window or its IME context cannot be
