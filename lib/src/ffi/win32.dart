@@ -43,6 +43,25 @@ typedef _IsWindowDart = int Function(Handle32);
 typedef _GetCurrentProcessIdNative = Uint32 Function();
 typedef _GetCurrentProcessIdDart = int Function();
 
+// ---------------------------------------------------------------------------
+// user32.dll — keyboard layout
+// ---------------------------------------------------------------------------
+
+/// Buffer size `GetKeyboardLayoutName` requires, in bytes: eight hex digits
+/// plus the terminator.
+const int klNameLength = 9;
+
+/// `KLF_ACTIVATE` — make the loaded layout the active one.
+const int klfActivate = 0x00000001;
+
+// The ANSI variants are deliberate. A layout identifier is always eight ASCII
+// hex digits, and matching what the native plugin called keeps the token bytes
+// identical to the ones 2.x produced.
+typedef _GetKeyboardLayoutNameNative = Int32 Function(Pointer<Utf8>);
+typedef _GetKeyboardLayoutNameDart = int Function(Pointer<Utf8>);
+typedef _LoadKeyboardLayoutNative = Handle32 Function(Pointer<Utf8>, Uint32);
+typedef _LoadKeyboardLayoutDart = Handle32 Function(Pointer<Utf8>, int);
+
 /// Lazily opened bindings to the Windows system libraries.
 ///
 /// Opening is deferred to first use so that merely constructing the FFI
@@ -94,4 +113,12 @@ class Win32 {
   late final getCurrentProcessId = _kernel32.lookupFunction<
       _GetCurrentProcessIdNative,
       _GetCurrentProcessIdDart>('GetCurrentProcessId');
+
+  late final getKeyboardLayoutName = _user32.lookupFunction<
+      _GetKeyboardLayoutNameNative,
+      _GetKeyboardLayoutNameDart>('GetKeyboardLayoutNameA');
+
+  late final loadKeyboardLayout = _user32.lookupFunction<
+      _LoadKeyboardLayoutNative,
+      _LoadKeyboardLayoutDart>('LoadKeyboardLayoutA');
 }
