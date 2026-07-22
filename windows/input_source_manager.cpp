@@ -36,7 +36,10 @@ void InputSourceManager::SendInputSourceChangedEvent(bool is_english) {
 }
 
 bool InputSourceManager::ShouldBlockMessage(UINT message, WPARAM wparam) const {
-  return ime_disabled_ && ShouldBlockImeMessage(message, wparam);
+  // SPIKE: message_blocking_enabled_ lets the example app switch this half of
+  // DisableIME() off at runtime, leaving only ImmAssociateContextEx.
+  return ime_disabled_ && message_blocking_enabled_ &&
+         ShouldBlockImeMessage(message, wparam);
 }
 
 // Set IME to English mode.

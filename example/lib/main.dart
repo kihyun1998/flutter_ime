@@ -60,6 +60,11 @@ class _HomePageState extends State<HomePage> {
       selectedIcon: Icon(Icons.lock),
       label: Text('Force English'),
     ),
+    NavigationRailDestination(
+      icon: Icon(Icons.science_outlined),
+      selectedIcon: Icon(Icons.science),
+      label: Text('SPIKE: FFI'),
+    ),
   ];
 
   static const List<Widget> _pages = [
@@ -68,6 +73,7 @@ class _HomePageState extends State<HomePage> {
     ImeDisablePage(),
     InputSourceChangePage(),
     ForceEnglishPage(),
+    FfiSpikePage(),
   ];
 
   @override
@@ -701,6 +707,248 @@ class _ForceEnglishPageState extends State<ForceEnglishPage> {
               inputFormatters: [
                 FilteringTextInputFormatter.allow(
                   RegExp(r'[a-zA-Z0-9!@#$%^&*()_+\-=\[\]{};:"\\|,.<>/?`~ ]'),
+                ),
+              ],
+            ),
+          ),
+        ],
+      ),
+    );
+  }
+}
+
+// ============================================================
+// 6. SPIKE: is the WndProc message block actually load-bearing?
+// ============================================================
+//
+// disableIME() on Windows is really two independent mechanisms:
+//
+//   (1) ImmAssociateContextEx(hwnd, NULL, 0) — detaches the IME context.
+//       A pure-Dart FFI port KEEPS this: it is a plain imm32 call.
+//
+//   (2) WndProc blocking of WM_IME_* / WM_CHAR in the Hangul ranges.
+//       A pure-Dart FFI port LOSES this: dart:ffi cannot install a
+//       synchronous callback on the Flutter platform thread
+//       (isolateLocal is thread-bound, listener cannot return LRESULT).
+//
+// This page toggles (2) at runtime so both modes can be compared inside a
+// single run. If Korean input is still impossible with (2) OFF, then the FFI
+// port loses nothing that matters and the migration is safe.
+//
+// Delete this page together with the native debugSetMessageBlocking handler.
+class FfiSpikePage extends StatefulWidget {
+  const FfiSpikePage({super.key});
+
+  @override
+  State<FfiSpikePage> createState() => _FfiSpikePageState();
+}
+
+class _FfiSpikePageState extends State<FfiSpikePage> {
+  static const _debugChannel = MethodChannel('flutter_ime');
+
+  final _controller = TextEditingController();
+  final _focusNode = FocusNode();
+
+  /// Control field: identical TextField that never calls disableIME(). If
+  /// Korean cannot be typed here either, the experiment is vacuous — the IME
+  /// was not working in the first place and proves nothing about disableIME().
+  final _controlController = TextEditingController();
+  final _controlFocusNode = FocusNode();
+
+  /// Whether the WndProc blocking half is active. true = mode A (current 2.x),
+  /// false = mode B (what survives a pure-Dart FFI port).
+  bool _blocking = true;
+  bool _focused = false;
+
+  @override
+  void initState() {
+    super.initState();
+    _focusNode.addListener(() {
+      setState(() => _focused = _focusNode.hasFocus);
+      if (_focusNode.hasFocus) {
+        disableIME();
+      } else {
+        enableIME();
+      }
+    });
+    _controller.addListener(() => setState(() {}));
+    _controlController.addListener(() => setState(() {}));
+  }
+
+  @override
+  void dispose() {
+    _controller.dispose();
+    _focusNode.dispose();
+    _controlController.dispose();
+    _controlFocusNode.dispose();
+    super.dispose();
+  }
+
+  Future<void> _setBlocking(bool value) async {
+    await _debugChannel
+        .invokeMethod<void>('debugSetMessageBlocking', {'enabled': value});
+    setState(() => _blocking = value);
+  }
+
+  /// Syllables AC00–D7A3, compatibility jamo 3131–3163, conjoining jamo
+  /// 1100–11FF. In the guarded field any hit is a leak; in the control field a
+  /// hit is what proves the IME works at all.
+  static bool _containsHangul(String s) => s.runes.any((r) =>
+      (r >= 0xAC00 && r <= 0xD7A3) ||
+      (r >= 0x3131 && r <= 0x3163) ||
+      (r >= 0x1100 && r <= 0x11FF));
+
+  bool get _hasHangul => _containsHangul(_controller.text);
+
+  static String _runesOf(String s) => s.runes
+      .map((r) => 'U+${r.toRadixString(16).toUpperCase().padLeft(4, '0')}')
+      .join(' ');
+
+  @override
+  Widget build(BuildContext context) {
+    return SingleChildScrollView(
+      padding: const EdgeInsets.all(24),
+      child: Column(
+        crossAxisAlignment: CrossAxisAlignment.start,
+        children: [
+          Text('SPIKE — WndProc block necessity',
+              style: Theme.of(context).textTheme.headlineMedium),
+          const SizedBox(height: 8),
+          const Text(
+            'Question: after a pure-Dart FFI port, disableIME() keeps '
+            'ImmAssociateContextEx but loses WndProc message blocking. '
+            'Does that still prevent Korean input?',
+          ),
+          const SizedBox(height: 20),
+          Card(
+            child: SwitchListTile(
+              value: _blocking,
+              onChanged: _setBlocking,
+              title: Text(_blocking
+                  ? 'Mode A — ImmAssociateContextEx + WndProc block (current 2.x)'
+                  : 'Mode B — ImmAssociateContextEx only (FFI 3.x)'),
+              subtitle: Text(_blocking
+                  ? 'Both mechanisms active.'
+                  : 'WndProc blocking OFF. This is what FFI can still do.'),
+            ),
+          ),
+          const SizedBox(height: 20),
+          const Text('Focus the field, press Han/Yeong, then type "안녕":'),
+          const SizedBox(height: 8),
+          SizedBox(
+            width: 420,
+            child: TextField(
+              controller: _controller,
+              focusNode: _focusNode,
+              decoration: InputDecoration(
+                border: const OutlineInputBorder(),
+                labelText:
+                    _focused ? 'IME disabled (focused)' : 'Click to focus',
+              ),
+            ),
+          ),
+          const SizedBox(height: 16),
+          Row(children: [
+            OutlinedButton.icon(
+              onPressed: () => _controller.clear(),
+              icon: const Icon(Icons.clear),
+              label: const Text('Clear'),
+            ),
+            const SizedBox(width: 12),
+            Text('IME context: ${_focused ? "DETACHED" : "attached"}',
+                style: TextStyle(color: Colors.grey[600])),
+          ]),
+          const SizedBox(height: 20),
+          Container(
+            width: double.infinity,
+            padding: const EdgeInsets.all(16),
+            decoration: BoxDecoration(
+              color: _controller.text.isEmpty
+                  ? Colors.grey[200]
+                  : (_hasHangul ? Colors.red[50] : Colors.green[50]),
+              borderRadius: BorderRadius.circular(8),
+            ),
+            child: Column(
+              crossAxisAlignment: CrossAxisAlignment.start,
+              children: [
+                Text(
+                  _controller.text.isEmpty
+                      ? 'RESULT: (nothing typed yet)'
+                      : (_hasHangul
+                          ? 'RESULT: HANGUL LEAKED  →  mechanism (2) is load-bearing'
+                          : 'RESULT: no Hangul  →  mechanism (1) is sufficient'),
+                  style: TextStyle(
+                    fontWeight: FontWeight.bold,
+                    color: _controller.text.isEmpty
+                        ? Colors.grey[700]
+                        : (_hasHangul ? Colors.red[900] : Colors.green[900]),
+                  ),
+                ),
+                const SizedBox(height: 8),
+                SelectableText(
+                  'text: "${_controller.text}"\n'
+                  'runes: ${_runesOf(_controller.text)}',
+                  style: const TextStyle(fontFamily: 'monospace', fontSize: 12),
+                ),
+              ],
+            ),
+          ),
+          const Divider(height: 48),
+          Text('Control — IME untouched',
+              style: Theme.of(context).textTheme.titleMedium),
+          const SizedBox(height: 4),
+          const Text(
+            'This field never calls disableIME(). Korean MUST be typable here. '
+            'If it is not, the result above is vacuous — the IME was not '
+            'working to begin with, so blocking it proves nothing.',
+          ),
+          const SizedBox(height: 12),
+          SizedBox(
+            width: 420,
+            child: TextField(
+              controller: _controlController,
+              focusNode: _controlFocusNode,
+              decoration: const InputDecoration(
+                border: OutlineInputBorder(),
+                labelText: 'Control (IME allowed) — type 안녕 here',
+              ),
+            ),
+          ),
+          const SizedBox(height: 12),
+          Container(
+            width: double.infinity,
+            padding: const EdgeInsets.all(16),
+            decoration: BoxDecoration(
+              color: _controlController.text.isEmpty
+                  ? Colors.grey[200]
+                  : (_containsHangul(_controlController.text)
+                      ? Colors.green[50]
+                      : Colors.orange[50]),
+              borderRadius: BorderRadius.circular(8),
+            ),
+            child: Column(
+              crossAxisAlignment: CrossAxisAlignment.start,
+              children: [
+                Text(
+                  _controlController.text.isEmpty
+                      ? 'CONTROL: (nothing typed yet)'
+                      : (_containsHangul(_controlController.text)
+                          ? 'CONTROL: Hangul typed OK  →  IME works, experiment is valid'
+                          : 'CONTROL: no Hangul  →  IME may be broken, result above is INVALID'),
+                  style: TextStyle(
+                    fontWeight: FontWeight.bold,
+                    color: _controlController.text.isEmpty
+                        ? Colors.grey[700]
+                        : (_containsHangul(_controlController.text)
+                            ? Colors.green[900]
+                            : Colors.orange[900]),
+                  ),
+                ),
+                const SizedBox(height: 8),
+                SelectableText(
+                  'text: "${_controlController.text}"\n'
+                  'runes: ${_runesOf(_controlController.text)}',
+                  style: const TextStyle(fontFamily: 'monospace', fontSize: 12),
                 ),
               ],
             ),

@@ -33,6 +33,24 @@ void HandleImeMethodCall(
     } else {
       result->Error("IME_ERROR", "Failed to enable IME");
     }
+  } else if (method == "debugSetMessageBlocking") {
+    // SPIKE ONLY: flips the WndProc-blocking half of DisableIME() so the
+    // example app can compare it against ImmAssociateContextEx alone.
+    const auto* args =
+        std::get_if<flutter::EncodableMap>(method_call.arguments());
+    const bool* enabled = nullptr;
+    if (args) {
+      auto it = args->find(flutter::EncodableValue("enabled"));
+      if (it != args->end()) {
+        enabled = std::get_if<bool>(&it->second);
+      }
+    }
+    if (enabled) {
+      input_source.SetMessageBlockingEnabled(*enabled);
+      result->Success();
+    } else {
+      result->Error("INVALID_ARGUMENT", "enabled (bool) is required");
+    }
   } else if (method == methods::kIsCapsLockOn) {
     result->Success(flutter::EncodableValue(caps_lock.QueryAndSyncState()));
   } else if (method == methods::kGetCurrentInputSource) {

@@ -43,12 +43,24 @@ class InputSourceManager {
   // disabled (see DisableIME).
   bool ShouldBlockMessage(UINT message, WPARAM wparam) const;
 
+  // SPIKE ONLY. Toggles the WndProc message-blocking half of DisableIME() at
+  // runtime, so the example app can A/B the two halves of the mechanism:
+  //   enabled=true  -> ImmAssociateContextEx + WM_IME_*/WM_CHAR blocking (2.x)
+  //   enabled=false -> ImmAssociateContextEx only (what a pure-Dart FFI port
+  //                    could still do, since FFI cannot install a synchronous
+  //                    WndProc callback on the platform thread)
+  // Not part of the shipping API; remove with the rest of the spike.
+  void SetMessageBlockingEnabled(bool enabled) {
+    message_blocking_enabled_ = enabled;
+  }
+
  private:
   void SendInputSourceChangedEvent(bool is_english);
 
   std::function<HWND()> hwnd_provider_;
   std::unique_ptr<flutter::EventSink<flutter::EncodableValue>> event_sink_;
   bool ime_disabled_ = false;
+  bool message_blocking_enabled_ = true;  // SPIKE ONLY
 };
 
 }  // namespace flutter_ime
