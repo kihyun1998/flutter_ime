@@ -16,14 +16,8 @@ const int cgEventSourceStateHidSystemState = 1;
 /// `kCGEventFlagMaskAlphaShift` — the Caps Lock bit of a `CGEventFlags`.
 const int cgEventFlagMaskAlphaShift = 0x00010000;
 
-/// `kVK_CapsLock` — the virtual keycode of the Caps Lock key.
-const int cgKeyCodeCapsLock = 0x39;
-
 typedef _CGEventSourceFlagsStateNative = Uint64 Function(Int32);
 typedef _CGEventSourceFlagsStateDart = int Function(int);
-
-typedef _CGEventSourceKeyStateNative = Uint8 Function(Int32, Uint16);
-typedef _CGEventSourceKeyStateDart = int Function(int, int);
 
 /// Lazily opened bindings to CoreGraphics.
 ///
@@ -52,13 +46,4 @@ class CoreGraphics {
   late final eventSourceFlagsState = _lib.lookupFunction<
       _CGEventSourceFlagsStateNative,
       _CGEventSourceFlagsStateDart>('CGEventSourceFlagsState');
-
-  /// Whether a key is physically held down right now.
-  ///
-  /// Needed because the Caps Lock *flag* is set while the key is held whether
-  /// or not the press will end up latching anything — see [capsLockState].
-  /// Needs no Accessibility permission either.
-  late final eventSourceKeyState = _lib.lookupFunction<
-      _CGEventSourceKeyStateNative,
-      _CGEventSourceKeyStateDart>('CGEventSourceKeyState');
 }
