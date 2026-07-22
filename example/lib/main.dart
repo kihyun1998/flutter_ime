@@ -761,12 +761,30 @@ class _FfiPageState extends State<FfiPage> {
   }
 
   @override
+  void deactivate() {
+    // Restore here rather than in dispose. A page transition runs the incoming
+    // page's initState before the outgoing page's dispose, so restoring in
+    // dispose would leave the FFI instance installed while the next page is
+    // already using it — which matters for the Input Source page, whose whole
+    // purpose here is to show what the *native* implementation reports.
+    _restorePlatform();
+    super.deactivate();
+  }
+
+  @override
   void dispose() {
+    _restorePlatform();
+    super.dispose();
+  }
+
+  /// Idempotent: deactivate can run without a following dispose, and an element
+  /// can be reactivated after being deactivated.
+  void _restorePlatform() {
     final previous = _previous;
     if (_installed && previous != null) {
       FlutterImePlatform.instance = previous;
+      _installed = false;
     }
-    super.dispose();
   }
 
   void _append(String line) => setState(() => _log = '$line\n$_log');
