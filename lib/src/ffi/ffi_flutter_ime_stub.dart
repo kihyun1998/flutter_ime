@@ -25,6 +25,10 @@ class FfiFlutterIme extends FlutterImePlatform {
   /// Always null here; the real implementation reports the resolved window.
   String? describeResolvedWindow() => null;
 
+  /// Always null here; the real implementation reports the selected macOS
+  /// input source.
+  String? describeCurrentInputSource() => null;
+
   @override
   Future<void> setEnglishKeyboard() => _fallback.setEnglishKeyboard();
 

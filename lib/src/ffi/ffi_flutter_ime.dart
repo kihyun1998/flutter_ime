@@ -4,9 +4,12 @@ library;
 
 import 'dart:io';
 
+import 'package:flutter/foundation.dart';
+
 import '../../flutter_ime_method_channel.dart';
 import '../value_poller.dart';
 import '../../flutter_ime_platform_interface.dart';
+import 'macos_ime.dart';
 import 'windows_ime.dart';
 
 /// Calls the operating system directly through `dart:ffi`, with no platform
@@ -22,8 +25,9 @@ import 'windows_ime.dart';
 /// **Operations not ported yet fall through to the native plugin** rather than
 /// throwing. That is what makes this safe to install at any point during the
 /// migration: a half-ported instance behaves like a whole one, so installing it
-/// can never break an operation that already worked. The same applies off
-/// Windows, where nothing is ported yet and every call falls through.
+/// can never break an operation that already worked. Windows is fully ported;
+/// macOS has only the two English-keyboard operations so far and falls through
+/// for the rest.
 ///
 /// This matters more than it looks. An earlier version threw for unported
 /// operations, and installing it mid-session crashed the example app: page
@@ -34,11 +38,33 @@ import 'windows_ime.dart';
 /// The fallback disappears along with the native plugin once every operation is
 /// ported.
 class FfiFlutterIme extends FlutterImePlatform {
-  FfiFlutterIme({WindowsIme? windowsIme, FlutterImePlatform? fallback})
-      : _windowsIme = windowsIme ?? (Platform.isWindows ? WindowsIme() : null),
+  FfiFlutterIme({FlutterImePlatform? fallback})
+      : _windowsIme = Platform.isWindows ? WindowsIme() : null,
+        _macosIme = Platform.isMacOS ? MacosIme() : null,
+        _fallback = fallback ?? MethodChannelFlutterIme();
+
+  /// Builds an instance with the backends given, doing no platform detection
+  /// of its own.
+  ///
+  /// Tests use this so that what they exercise does not depend on the host they
+  /// run on. The default constructor picks a backend from [Platform], which in a
+  /// test means the real one — a `flutter test` run on a Mac would then switch
+  /// the developer's keyboard layout, and one on Windows would reach into
+  /// whatever window happened to be focused.
+  @visibleForTesting
+  FfiFlutterIme.withBackends({
+    WindowsIme? windowsIme,
+    MacosIme? macosIme,
+    FlutterImePlatform? fallback,
+  })  : _windowsIme = windowsIme,
+        _macosIme = macosIme,
         _fallback = fallback ?? MethodChannelFlutterIme();
 
   final WindowsIme? _windowsIme;
+
+  /// Null off macOS. Only the two English-keyboard operations are ported here
+  /// so far; everything else on macOS still falls through.
+  final MacosIme? _macosIme;
 
   /// Handles everything not yet reachable through FFI.
   final FlutterImePlatform _fallback;
@@ -66,14 +92,26 @@ class FfiFlutterIme extends FlutterImePlatform {
   /// depends on `dart:ffi`. Intended for diagnostics in the example app.
   String? describeResolvedWindow() => _windowsIme?.resolveWindow().toString();
 
+  /// Describes the selected macOS input source — its identifier and the
+  /// languages it types — or null where that is not an FFI operation.
+  ///
+  /// A string for the same reason as [describeResolvedWindow]: it crosses the
+  /// conditional-import boundary, and the web stub cannot name a type that
+  /// depends on `dart:ffi`. Intended for diagnostics in the example app, where
+  /// it shows why [isEnglishKeyboard] answered the way it did.
+  String? describeCurrentInputSource() =>
+      _macosIme?.describeCurrentInputSource();
+
   // -------------------------------------------------------------------------
   // Ported to FFI
   // -------------------------------------------------------------------------
 
-  /// Switches the IME to English.
+  /// Switches the keyboard to English: alphanumeric conversion mode on
+  /// Windows, the ABC layout on macOS.
   ///
-  /// Does nothing if the target window cannot be resolved — for example while
-  /// the app has no window of its own to find.
+  /// Does nothing on Windows if the target window cannot be resolved — for
+  /// example while the app has no window of its own to find — and nothing on
+  /// macOS if ABC is not among the user's enabled input sources.
   ///
   /// **Differs from 2.x.** The native plugin reported failure as a
   /// `PlatformException`; this reports it by doing nothing. Callers wire these
@@ -82,22 +120,41 @@ class FfiFlutterIme extends FlutterImePlatform {
   /// seeing it — nothing breaks, but nothing warns either.
   @override
   Future<void> setEnglishKeyboard() async {
-    final ime = _windowsIme;
-    if (ime == null) return _fallback.setEnglishKeyboard();
-    ime.setEnglishKeyboard();
+    final windows = _windowsIme;
+    if (windows != null) {
+      windows.setEnglishKeyboard();
+      return;
+    }
+    final macos = _macosIme;
+    if (macos != null) {
+      macos.setEnglishKeyboard();
+      return;
+    }
+    return _fallback.setEnglishKeyboard();
   }
 
-  /// Whether the IME is in English mode.
+  /// Whether the keyboard is currently English.
   ///
-  /// Returns false when the target window or its IME context cannot be
-  /// reached, which is also what the native plugin reports in that situation.
-  /// A detached IME context — the normal state after `disableIME()` — reads as
-  /// false for the same reason.
+  /// **This asks a different question on each platform, deliberately.** On
+  /// Windows it means "the IME is not converting to the native language"; on
+  /// macOS it means "the selected layout types English". macOS switches whole
+  /// layouts where Windows toggles a conversion mode within one, so there is no
+  /// single question to ask. The divergence predates this implementation.
+  ///
+  /// Returns false when the answer cannot be read: on Windows when the target
+  /// window or its IME context cannot be reached — including after
+  /// `disableIME()`, which leaves no context to read — and on macOS when there
+  /// is no readable current input source.
+  ///
+  /// **The macOS answer differs from 2.x** for every English layout that is not
+  /// ABC or US. `isEnglishInputSource` records why.
   @override
   Future<bool> isEnglishKeyboard() async {
-    final ime = _windowsIme;
-    if (ime == null) return _fallback.isEnglishKeyboard();
-    return ime.isEnglishKeyboard();
+    final windows = _windowsIme;
+    if (windows != null) return windows.isEnglishKeyboard();
+    final macos = _macosIme;
+    if (macos != null) return macos.isEnglishKeyboard();
+    return _fallback.isEnglishKeyboard();
   }
 
   /// Reads the current keyboard as an opaque token.

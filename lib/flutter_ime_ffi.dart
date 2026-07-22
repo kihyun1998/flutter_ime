@@ -9,7 +9,7 @@
 /// import 'package:flutter_ime/flutter_ime_platform_interface.dart';
 ///
 /// void main() {
-///   if (Platform.isWindows) {
+///   if (Platform.isWindows || Platform.isMacOS) {
 ///     FlutterImePlatform.instance = FfiFlutterIme();
 ///   }
 ///   runApp(const MyApp());

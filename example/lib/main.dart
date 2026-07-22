@@ -745,6 +745,10 @@ class _FfiPageState extends State<FfiPage> {
   /// process's window tree on a cache miss.
   String _window = '(not resolved)';
 
+  /// The selected macOS input source, its ID and the languages it types. Read
+  /// on entry and on demand, not during build.
+  String _inputSource = '(not read)';
+
   /// The token from the last save, awaiting a restore.
   String? _saved;
 
@@ -770,12 +774,13 @@ class _FfiPageState extends State<FfiPage> {
   @override
   void initState() {
     super.initState();
-    if (Platform.isWindows) {
+    if (Platform.isWindows || Platform.isMacOS) {
       _previous = FlutterImePlatform.instance;
       final ffi = FfiFlutterIme();
       FlutterImePlatform.instance = ffi;
       _installed = true;
       _window = ffi.describeResolvedWindow() ?? '(none)';
+      _inputSource = ffi.describeCurrentInputSource() ?? '(none)';
     }
 
     // The guarded field is guarded here, and only here. Without this the field
@@ -794,9 +799,11 @@ class _FfiPageState extends State<FfiPage> {
     _guardedController.addListener(() => setState(() {}));
     _controlController.addListener(() => setState(() {}));
 
-    // Both streams are polled on Windows. Nothing is polled until these
-    // subscriptions exist, and the pollers stop again when they are cancelled.
-    _subscribe();
+    // Windows only. Both streams are polled there, and nothing is polled until
+    // these subscriptions exist. On macOS neither stream is ported yet, so
+    // subscribing would only start the native plugin's monitors for a readout
+    // this page does not show.
+    if (Platform.isWindows) _subscribe();
   }
 
   void _subscribe() {
@@ -998,14 +1005,35 @@ class _FfiPageState extends State<FfiPage> {
         : '(not the FFI instance)';
   }
 
+  /// Re-reads the selected input source through the FFI instance.
+  void _readSource() {
+    final instance = FlutterImePlatform.instance;
+    setState(() => _inputSource = instance is FfiFlutterIme
+        ? (instance.describeCurrentInputSource() ?? '(none)')
+        : '(not the FFI instance)');
+  }
+
+  Future<void> _checkAndRead() async {
+    await _check();
+    _readSource();
+  }
+
+  Future<void> _setEnglishAndRead() async {
+    await setEnglishKeyboard();
+    _append('setEnglishKeyboard() called');
+    await _checkAndRead();
+  }
+
   @override
   Widget build(BuildContext context) {
     if (!_installed) {
       return const Padding(
         padding: EdgeInsets.all(24),
-        child: Text('The FFI implementation currently supports Windows only.'),
+        child: Text(
+            'The FFI implementation currently supports Windows and macOS.'),
       );
     }
+    if (Platform.isMacOS) return _buildMacos(context);
     return SingleChildScrollView(
       padding: const EdgeInsets.all(24),
       child: Column(
@@ -1255,6 +1283,133 @@ class _FfiPageState extends State<FfiPage> {
             onPressed: _setEnglishDelayed,
             icon: const Icon(Icons.timer_outlined),
             label: const Text('Run in 3s (then click another app)'),
+          ),
+          const SizedBox(height: 16),
+          Container(
+            width: double.infinity,
+            constraints: const BoxConstraints(minHeight: 120),
+            padding: const EdgeInsets.all(16),
+            decoration: BoxDecoration(
+              color: Colors.grey[200],
+              borderRadius: BorderRadius.circular(8),
+            ),
+            child: SelectableText(
+              _log.isEmpty ? '(no calls yet)' : _log,
+              style: const TextStyle(fontFamily: 'monospace', fontSize: 12),
+            ),
+          ),
+        ],
+      ),
+    );
+  }
+
+  /// The macOS half of this page.
+  ///
+  /// Separate from the Windows build rather than woven into it with platform
+  /// checks: the two platforms have almost nothing in common here. Windows
+  /// toggles a conversion mode inside one layout and needs a window handle to
+  /// do it; macOS selects a whole layout and needs no window at all. Only
+  /// setEnglishKeyboard and isEnglishKeyboard are ported on macOS so far, so
+  /// the disable/enable, token and polled-stream sections have nothing to show.
+  Widget _buildMacos(BuildContext context) {
+    return SingleChildScrollView(
+      padding: const EdgeInsets.all(24),
+      child: Column(
+        crossAxisAlignment: CrossAxisAlignment.start,
+        children: [
+          Text('FFI (opt-in) — macOS',
+              style: Theme.of(context).textTheme.headlineMedium),
+          const SizedBox(height: 8),
+          const Text(
+            'These calls go through dart:ffi to Text Input Source Services '
+            'directly. No method channel and no native plugin code is '
+            'involved. Everything else on this page falls through to the '
+            'native plugin for now.',
+          ),
+          const SizedBox(height: 20),
+          Card(
+            color: Colors.blueGrey[50],
+            child: Padding(
+              padding: const EdgeInsets.all(16),
+              child: Column(
+                crossAxisAlignment: CrossAxisAlignment.start,
+                children: [
+                  const Text('Selected input source',
+                      style: TextStyle(fontWeight: FontWeight.bold)),
+                  const SizedBox(height: 4),
+                  SelectableText(
+                    _inputSource,
+                    style:
+                        const TextStyle(fontFamily: 'monospace', fontSize: 12),
+                  ),
+                  const SizedBox(height: 8),
+                  const Text(
+                    'The first language listed is what decides the answer '
+                    'below. It is read straight from the input source, not '
+                    'guessed from its ID.',
+                    style: TextStyle(fontSize: 12),
+                  ),
+                ],
+              ),
+            ),
+          ),
+          const SizedBox(height: 20),
+          const SizedBox(
+            width: 480,
+            child: TextField(
+              decoration: InputDecoration(
+                border: OutlineInputBorder(),
+                labelText: 'Type here, switch layout with Caps Lock or the '
+                    'menu bar, then check',
+              ),
+            ),
+          ),
+          const SizedBox(height: 16),
+          Wrap(spacing: 12, runSpacing: 8, children: [
+            FilledButton.icon(
+              onPressed: _setEnglishAndRead,
+              icon: const Icon(Icons.abc),
+              label: const Text('setEnglishKeyboard()'),
+            ),
+            OutlinedButton.icon(
+              onPressed: _checkAndRead,
+              icon: const Icon(Icons.help_outline),
+              label: const Text('isEnglishKeyboard()'),
+            ),
+            TextButton(
+              onPressed: () => setState(() => _log = ''),
+              child: const Text('Clear'),
+            ),
+          ]),
+          const SizedBox(height: 24),
+          Card(
+            color: Colors.amber[50],
+            child: Padding(
+              padding: const EdgeInsets.all(16),
+              child: Column(
+                crossAxisAlignment: CrossAxisAlignment.start,
+                children: [
+                  const Text('The case 2.x got wrong',
+                      style: TextStyle(fontWeight: FontWeight.bold)),
+                  const SizedBox(height: 8),
+                  const Text(
+                    'In System Settings › Keyboard › Input Sources, add an '
+                    'English layout that is not ABC or U.S. — Dvorak, Colemak, '
+                    'British, Australian or Canadian. Select it, then press '
+                    'isEnglishKeyboard().\n\n'
+                    'It must answer true. 2.x answered false for every one of '
+                    'them, and the "force English" recipe in the README reacts '
+                    'to a false by switching the keyboard — so 2.x dragged '
+                    'those users to ABC every time they focused a password '
+                    'field.\n\n'
+                    'Worth trying the other direction too: ABC — AZERTY types '
+                    'French, and its ID starts with the exact string 2.x '
+                    'matched on. It must answer false.',
+                    style: TextStyle(fontSize: 13),
+                  ),
+                ],
+              ),
+            ),
           ),
           const SizedBox(height: 16),
           Container(

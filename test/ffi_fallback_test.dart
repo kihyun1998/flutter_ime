@@ -19,6 +19,7 @@ import 'dart:ffi';
 // into the web build. This test is VM-only anyway, having just imported it.
 import 'package:flutter_ime/src/ffi/ffi_flutter_ime.dart';
 import 'package:flutter_ime/src/ffi/ffi_flutter_ime_stub.dart' as stub;
+import 'package:flutter_ime/src/ffi/macos_ime.dart';
 import 'package:flutter_ime/src/ffi/win32.dart';
 import 'package:flutter_ime/src/ffi/window_resolver.dart';
 import 'package:flutter_ime/src/ffi/windows_ime.dart';
@@ -56,7 +57,7 @@ void main() {
 
   setUp(() {
     fallback = MockFlutterImePlatform();
-    ffi = FfiFlutterIme(
+    ffi = FfiFlutterIme.withBackends(
       windowsIme: unresolvableWindowsIme(),
       fallback: fallback,
     );
@@ -134,7 +135,7 @@ void main() {
 
     setUp(() {
       foregroundFallback = MockFlutterImePlatform();
-      foregroundFfi = FfiFlutterIme(
+      foregroundFfi = FfiFlutterIme.withBackends(
         windowsIme: WindowsIme(
           win32: _ExplodingWin32(),
           resolver: WindowResolver(
@@ -162,12 +163,73 @@ void main() {
     });
   });
 
+  group('macOS is half-ported: English operations reach FFI, the rest do not',
+      () {
+    // #16 ports setEnglishKeyboard and isEnglishKeyboard to Text Input Source
+    // Services and nothing else. Both halves of that are worth pinning: the two
+    // ported operations must not also go through the native plugin, and the
+    // unported ones must still get there, because a macOS consumer who installs
+    // this instance today is relying on the fall-through for the other five.
+    late MockFlutterImePlatform macosFallback;
+    late _FakeMacosIme macos;
+    late FfiFlutterIme macosFfi;
+
+    setUp(() {
+      macosFallback = MockFlutterImePlatform();
+      macos = _FakeMacosIme();
+      macosFfi = FfiFlutterIme.withBackends(
+        macosIme: macos,
+        fallback: macosFallback,
+      );
+    });
+
+    tearDown(() => macosFallback.dispose());
+
+    test('setEnglishKeyboard reaches FFI', () async {
+      await macosFfi.setEnglishKeyboard();
+
+      expect(macos.calls, ['setEnglishKeyboard']);
+      expect(macosFallback.calls, isEmpty);
+    });
+
+    test('isEnglishKeyboard reaches FFI and reports what it answered',
+        () async {
+      macos.english = true;
+
+      expect(await macosFfi.isEnglishKeyboard(), isTrue);
+      expect(macos.calls, ['isEnglishKeyboard']);
+      expect(macosFallback.calls, isEmpty);
+    });
+
+    test('everything else still falls through to the native plugin', () async {
+      await macosFfi.getCurrentInputSource();
+      await macosFfi.setInputSource('com.apple.keylayout.ABC');
+      await macosFfi.disableIME();
+      await macosFfi.enableIME();
+      await macosFfi.isCapsLockOn();
+      await macosFfi.onInputSourceChanged.listen((_) {}).cancel();
+      await macosFfi.onCapsLockChanged.listen((_) {}).cancel();
+
+      expect(
+          macosFallback.calls,
+          containsAll(<String>[
+            'getCurrentInputSource',
+            'setInputSource',
+            'disableIME',
+            'enableIME',
+            'isCapsLockOn',
+            'onInputSourceChanged',
+            'onCapsLockChanged',
+          ]));
+      expect(macos.calls, isEmpty);
+    });
+  });
+
   group('where there is no FFI implementation, everything falls through', () {
-    // The web stub is the shipping form of "this platform has no FFI backend",
-    // and it is also the shape macOS is in until its own tickets land. The
-    // fall-through is what makes a half-ported instance safe to install at any
-    // moment — an earlier version threw instead, and crashed the example app on
-    // a page transition.
+    // The web stub is the shipping form of "this platform has no FFI backend".
+    // The fall-through is what makes a half-ported instance safe to install at
+    // any moment — an earlier version threw instead, and crashed the example app
+    // on a page transition.
     late MockFlutterImePlatform stubFallback;
     late stub.FfiFlutterIme stubbed;
 
@@ -247,6 +309,36 @@ class _FakeWin32 implements Win32 {
     }
     throw StateError(
         'unexpected Win32 call from a test: ${invocation.memberName}');
+  }
+}
+
+/// A [MacosIme] that records what it was asked and touches nothing.
+///
+/// A real one in a test process would reach Text Input Source Services for
+/// real: `flutter test` on a Mac would read — and, for `setEnglishKeyboard`,
+/// change — the developer's own keyboard layout.
+class _FakeMacosIme implements MacosIme {
+  final List<String> calls = [];
+
+  /// What [isEnglishKeyboard] answers.
+  bool english = false;
+
+  @override
+  bool setEnglishKeyboard() {
+    calls.add('setEnglishKeyboard');
+    return true;
+  }
+
+  @override
+  bool isEnglishKeyboard() {
+    calls.add('isEnglishKeyboard');
+    return english;
+  }
+
+  @override
+  String? describeCurrentInputSource() {
+    calls.add('describeCurrentInputSource');
+    return null;
   }
 }
 
