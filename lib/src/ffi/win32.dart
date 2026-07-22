@@ -28,6 +28,16 @@ typedef _ImmSetConversionStatusNative = Int32 Function(
     Handle32, Uint32, Uint32);
 typedef _ImmSetConversionStatusDart = int Function(Handle32, int, int);
 
+/// `IACE_DEFAULT` — restore the window's default IME context.
+///
+/// Detaching uses no flag at all: a null context with no flags is what removes
+/// the association, which is how the IME gets disabled.
+const int iaceDefault = 0x0010;
+
+typedef _ImmAssociateContextExNative = Int32 Function(
+    Handle32, Handle32, Uint32);
+typedef _ImmAssociateContextExDart = int Function(Handle32, Handle32, int);
+
 // ---------------------------------------------------------------------------
 // user32.dll / kernel32.dll — window lookup
 // ---------------------------------------------------------------------------
@@ -94,6 +104,10 @@ class Win32 {
   late final immSetConversionStatus = _imm32.lookupFunction<
       _ImmSetConversionStatusNative,
       _ImmSetConversionStatusDart>('ImmSetConversionStatus');
+
+  late final immAssociateContextEx = _imm32.lookupFunction<
+      _ImmAssociateContextExNative,
+      _ImmAssociateContextExDart>('ImmAssociateContextEx');
 
   late final findWindowEx =
       _user32.lookupFunction<_FindWindowExNative, _FindWindowExNative>(
