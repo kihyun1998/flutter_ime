@@ -1,8 +1,11 @@
 import 'dart:async';
+import 'dart:io';
 
 import 'package:flutter/material.dart';
 import 'package:flutter/services.dart';
 import 'package:flutter_ime/flutter_ime.dart';
+import 'package:flutter_ime/flutter_ime_ffi.dart';
+import 'package:flutter_ime/flutter_ime_platform_interface.dart';
 
 void main() {
   runApp(const MyApp());
@@ -56,6 +59,11 @@ class _HomePageState extends State<HomePage> {
       label: Text('Input Source'),
     ),
     NavigationRailDestination(
+      icon: Icon(Icons.memory_outlined),
+      selectedIcon: Icon(Icons.memory),
+      label: Text('FFI (opt-in)'),
+    ),
+    NavigationRailDestination(
       icon: Icon(Icons.lock_outline),
       selectedIcon: Icon(Icons.lock),
       label: Text('Force English'),
@@ -67,6 +75,7 @@ class _HomePageState extends State<HomePage> {
     KeyboardStatusPage(),
     ImeDisablePage(),
     InputSourceChangePage(),
+    FfiPage(),
     ForceEnglishPage(),
   ];
 
@@ -703,6 +712,158 @@ class _ForceEnglishPageState extends State<ForceEnglishPage> {
                   RegExp(r'[a-zA-Z0-9!@#$%^&*()_+\-=\[\]{};:"\\|,.<>/?`~ ]'),
                 ),
               ],
+            ),
+          ),
+        ],
+      ),
+    );
+  }
+}
+
+// ============================================================
+// 6. FFI (opt-in) — Windows English keyboard through pure Dart
+// ============================================================
+//
+// While the FFI migration is in progress the native plugin is still the
+// default. This page installs the FFI implementation on entry and restores the
+// previous one on exit, so the *public* API path is genuinely exercised
+// end-to-end — top-level function, platform gating, platform interface, FFI —
+// without rerouting the pages whose operations are not ported yet.
+class FfiPage extends StatefulWidget {
+  const FfiPage({super.key});
+
+  @override
+  State<FfiPage> createState() => _FfiPageState();
+}
+
+class _FfiPageState extends State<FfiPage> {
+  FlutterImePlatform? _previous;
+  FfiFlutterIme? _ffi;
+  String _log = '';
+  bool _installed = false;
+
+  @override
+  void initState() {
+    super.initState();
+    if (Platform.isWindows) {
+      _previous = FlutterImePlatform.instance;
+      final ffi = FfiFlutterIme();
+      _ffi = ffi;
+      FlutterImePlatform.instance = ffi;
+      _installed = true;
+    }
+  }
+
+  @override
+  void dispose() {
+    final previous = _previous;
+    if (_installed && previous != null) {
+      FlutterImePlatform.instance = previous;
+    }
+    super.dispose();
+  }
+
+  void _append(String line) => setState(() => _log = '$line\n$_log');
+
+  Future<void> _check() async {
+    final english = await isEnglishKeyboard();
+    _append('isEnglishKeyboard() -> $english');
+  }
+
+  Future<void> _setEnglish() async {
+    await setEnglishKeyboard();
+    _append('setEnglishKeyboard() called');
+    await _check();
+  }
+
+  @override
+  Widget build(BuildContext context) {
+    if (!_installed) {
+      return const Padding(
+        padding: EdgeInsets.all(24),
+        child: Text('The FFI implementation currently supports Windows only.'),
+      );
+    }
+    return SingleChildScrollView(
+      padding: const EdgeInsets.all(24),
+      child: Column(
+        crossAxisAlignment: CrossAxisAlignment.start,
+        children: [
+          Text('FFI (opt-in)',
+              style: Theme.of(context).textTheme.headlineMedium),
+          const SizedBox(height: 8),
+          const Text(
+            'These calls go through dart:ffi to imm32.dll directly. No method '
+            'channel and no native plugin code is involved.',
+          ),
+          const SizedBox(height: 20),
+          Card(
+            color: Colors.blueGrey[50],
+            child: Padding(
+              padding: const EdgeInsets.all(16),
+              child: Column(
+                crossAxisAlignment: CrossAxisAlignment.start,
+                children: [
+                  const Text('Resolved window',
+                      style: TextStyle(fontWeight: FontWeight.bold)),
+                  const SizedBox(height: 4),
+                  SelectableText(
+                    _ffi?.windowDiagnostics ?? '(none)',
+                    style:
+                        const TextStyle(fontFamily: 'monospace', fontSize: 12),
+                  ),
+                  const SizedBox(height: 8),
+                  const Text(
+                    'flutterView is the handle the native plugin used. '
+                    'runnerWindow or foregroundWindow means the preferred '
+                    'lookup missed.',
+                    style: TextStyle(fontSize: 12),
+                  ),
+                ],
+              ),
+            ),
+          ),
+          const SizedBox(height: 20),
+          const SizedBox(
+            width: 420,
+            child: TextField(
+              decoration: InputDecoration(
+                border: OutlineInputBorder(),
+                labelText: 'Type here, switch with Han/Yeong, then check',
+              ),
+            ),
+          ),
+          const SizedBox(height: 16),
+          Row(children: [
+            FilledButton.icon(
+              onPressed: _setEnglish,
+              icon: const Icon(Icons.abc),
+              label: const Text('setEnglishKeyboard()'),
+            ),
+            const SizedBox(width: 12),
+            OutlinedButton.icon(
+              onPressed: _check,
+              icon: const Icon(Icons.help_outline),
+              label: const Text('isEnglishKeyboard()'),
+            ),
+            const SizedBox(width: 12),
+            TextButton(
+              onPressed: () => setState(() => _log = ''),
+              child: const Text('Clear'),
+            ),
+          ]),
+          const SizedBox(height: 16),
+          Container(
+            width: double.infinity,
+            constraints: const BoxConstraints(minHeight: 120),
+            padding: const EdgeInsets.all(16),
+            decoration: BoxDecoration(
+              color: Colors.grey[200],
+              borderRadius: BorderRadius.circular(8),
+            ),
+            child: SelectableText(
+              _log.isEmpty ? '(no calls yet)' : _log,
+              style: const TextStyle(fontFamily: 'monospace', fontSize: 12),
             ),
           ),
         ],
