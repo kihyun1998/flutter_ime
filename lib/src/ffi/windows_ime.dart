@@ -95,6 +95,12 @@ class WindowsIme {
     return isEnglishConversionMode(status.conversion);
   }
 
+  /// Whether Caps Lock is currently toggled on.
+  ///
+  /// Needs no window: the toggle is keyboard state, not window state.
+  bool isCapsLockOn() =>
+      (_win32.getKeyState(vkCapital) & keyStateToggledMask) != 0;
+
   /// Disables the IME by detaching its context from the window, so composition
   /// cannot start at all.
   ///

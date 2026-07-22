@@ -762,6 +762,11 @@ class _FfiPageState extends State<FfiPage> {
 
   int _cycles = 0;
 
+  StreamSubscription<bool>? _capsSub;
+  StreamSubscription<bool>? _sourceSub;
+  bool? _capsLive;
+  final List<String> _streamLog = [];
+
   @override
   void initState() {
     super.initState();
@@ -788,6 +793,19 @@ class _FfiPageState extends State<FfiPage> {
     // keystroke or they sit at "(nothing typed)" while text goes in.
     _guardedController.addListener(() => setState(() {}));
     _controlController.addListener(() => setState(() {}));
+
+    // Both streams are polled on Windows. Nothing is polled until these
+    // subscriptions exist, and the pollers stop again when they are cancelled.
+    _capsSub = onCapsLockChanged().listen((on) {
+      setState(() {
+        _capsLive = on;
+        _streamLog.insert(0, 'onCapsLockChanged -> $on');
+      });
+    });
+    _sourceSub = onInputSourceChanged().listen((english) {
+      setState(() => _streamLog.insert(
+          0, 'onInputSourceChanged -> ${english ? "English" : "non-English"}'));
+    });
   }
 
   @override
@@ -813,6 +831,13 @@ class _FfiPageState extends State<FfiPage> {
   /// Idempotent: deactivate can run without a following dispose, and an element
   /// can be reactivated after being deactivated.
   void _restorePlatform() {
+    // Cancel first: these subscriptions belong to the FFI instance's pollers,
+    // and leaving them attached would keep polling after this page is gone.
+    _capsSub?.cancel();
+    _capsSub = null;
+    _sourceSub?.cancel();
+    _sourceSub = null;
+
     final previous = _previous;
     if (_installed && previous != null) {
       FlutterImePlatform.instance = previous;
@@ -883,6 +908,11 @@ class _FfiPageState extends State<FfiPage> {
 
   /// Runs disable/enable back to back several times. The acceptance criterion
   /// is that the IME still works afterwards, which the control field shows.
+  Future<void> _queryCapsLock() async {
+    final on = await isCapsLockOn();
+    _append('isCapsLockOn() -> $on');
+  }
+
   Future<void> _runCycles() async {
     for (var i = 0; i < 5; i++) {
       await disableIME();
@@ -1029,6 +1059,49 @@ class _FfiPageState extends State<FfiPage> {
               child: const Text('Clear'),
             ),
           ]),
+          const SizedBox(height: 24),
+          Text('Live streams', style: Theme.of(context).textTheme.titleMedium),
+          const SizedBox(height: 4),
+          const Text(
+            'Polled, not pushed: Windows has no callback FFI can receive. '
+            'Toggle Caps Lock, or switch layout with Han/Yeong, and watch the '
+            'log. Neither stream emits the value it started from, and neither '
+            'repeats a value.',
+          ),
+          const SizedBox(height: 12),
+          Row(children: [
+            Icon(Icons.keyboard_capslock,
+                color: _capsLive == true ? Colors.orange : Colors.grey),
+            const SizedBox(width: 8),
+            Text('stream says Caps Lock: '
+                '${_capsLive == null ? "(no change seen yet)" : (_capsLive! ? "ON" : "OFF")}'),
+            const SizedBox(width: 16),
+            OutlinedButton.icon(
+              onPressed: _queryCapsLock,
+              icon: const Icon(Icons.help_outline),
+              label: const Text('isCapsLockOn()'),
+            ),
+          ]),
+          const SizedBox(height: 8),
+          Container(
+            width: double.infinity,
+            height: 130,
+            padding: const EdgeInsets.all(12),
+            decoration: BoxDecoration(
+              color: Colors.grey[200],
+              borderRadius: BorderRadius.circular(8),
+            ),
+            child: _streamLog.isEmpty
+                ? const Text('(no events yet)')
+                : ListView(
+                    children: _streamLog
+                        .take(20)
+                        .map((line) => Text(line,
+                            style: const TextStyle(
+                                fontFamily: 'monospace', fontSize: 12)))
+                        .toList(),
+                  ),
+          ),
           const SizedBox(height: 24),
           Text('Disable / enable IME',
               style: Theme.of(context).textTheme.titleMedium),

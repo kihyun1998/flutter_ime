@@ -54,6 +54,21 @@ typedef _GetCurrentProcessIdNative = Uint32 Function();
 typedef _GetCurrentProcessIdDart = int Function();
 
 // ---------------------------------------------------------------------------
+// user32.dll — key state
+// ---------------------------------------------------------------------------
+
+/// `VK_CAPITAL` — the Caps Lock virtual key.
+const int vkCapital = 0x14;
+
+/// Mask for the toggle bit of a `GetKeyState` result. The high bit says whether
+/// the key is held down right now; this low bit says whether the toggle is on,
+/// which is the part that matters for Caps Lock.
+const int keyStateToggledMask = 0x0001;
+
+typedef _GetKeyStateNative = Int16 Function(Int32);
+typedef _GetKeyStateDart = int Function(int);
+
+// ---------------------------------------------------------------------------
 // user32.dll — keyboard layout
 // ---------------------------------------------------------------------------
 
@@ -135,4 +150,7 @@ class Win32 {
   late final loadKeyboardLayout = _user32.lookupFunction<
       _LoadKeyboardLayoutNative,
       _LoadKeyboardLayoutDart>('LoadKeyboardLayoutA');
+
+  late final getKeyState = _user32
+      .lookupFunction<_GetKeyStateNative, _GetKeyStateDart>('GetKeyState');
 }

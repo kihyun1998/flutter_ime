@@ -5,6 +5,7 @@ library;
 import 'dart:io';
 
 import '../../flutter_ime_method_channel.dart';
+import '../value_poller.dart';
 import '../../flutter_ime_platform_interface.dart';
 import 'windows_ime.dart';
 
@@ -41,6 +42,18 @@ class FfiFlutterIme extends FlutterImePlatform {
 
   /// Handles everything not yet reachable through FFI.
   final FlutterImePlatform _fallback;
+
+  /// How often the polled streams re-read their value.
+  ///
+  /// Deliberately not configurable: the public API should not grow a knob for
+  /// it. Chosen so that reverting an unwanted keyboard switch feels immediate —
+  /// the "force English" recipe in the README reacts to these events, and a
+  /// slower poll would let a character or two through first. Two cheap Win32
+  /// reads at this rate cost nothing measurable.
+  static const Duration _pollInterval = Duration(milliseconds: 50);
+
+  ValuePoller<bool>? _inputSourcePoller;
+  ValuePoller<bool>? _capsLockPoller;
 
   /// Resolves the target window and describes it, or returns null where there
   /// is no FFI implementation yet.
@@ -146,16 +159,47 @@ class FfiFlutterIme extends FlutterImePlatform {
     ime.enableIme();
   }
 
-  // -------------------------------------------------------------------------
-  // Not ported yet — handled by the native plugin
-  // -------------------------------------------------------------------------
-
+  /// Whether Caps Lock is currently on.
   @override
-  Future<bool> isCapsLockOn() => _fallback.isCapsLockOn();
+  Future<bool> isCapsLockOn() async {
+    final ime = _windowsIme;
+    if (ime == null) return _fallback.isCapsLockOn();
+    return ime.isCapsLockOn();
+  }
 
+  /// Emits when the keyboard switches between English and non-English.
+  ///
+  /// **Differs from 2.x** in one deliberate way. The native plugin emitted on
+  /// every layout-change message, so switching Korean to Japanese — both
+  /// non-English — emitted `false` a second time. This emits only when the
+  /// value actually changes, which is what "emits when the input source
+  /// changes" always claimed.
+  ///
+  /// Driven by polling rather than by window messages, for the reason given on
+  /// [ValuePoller]. Nothing is polled until something listens.
   @override
-  Stream<bool> get onInputSourceChanged => _fallback.onInputSourceChanged;
+  Stream<bool> get onInputSourceChanged {
+    final ime = _windowsIme;
+    if (ime == null) return _fallback.onInputSourceChanged;
+    return (_inputSourcePoller ??= ValuePoller<bool>(
+      read: ime.isEnglishKeyboard,
+      interval: _pollInterval,
+    ))
+        .stream;
+  }
 
+  /// Emits when Caps Lock is toggled.
+  ///
+  /// The state current when a listener attaches is not emitted; use
+  /// [isCapsLockOn] for that. Nothing is polled until something listens.
   @override
-  Stream<bool> get onCapsLockChanged => _fallback.onCapsLockChanged;
+  Stream<bool> get onCapsLockChanged {
+    final ime = _windowsIme;
+    if (ime == null) return _fallback.onCapsLockChanged;
+    return (_capsLockPoller ??= ValuePoller<bool>(
+      read: ime.isCapsLockOn,
+      interval: _pollInterval,
+    ))
+        .stream;
+  }
 }
