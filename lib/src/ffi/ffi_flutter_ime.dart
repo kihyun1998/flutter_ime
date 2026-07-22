@@ -49,9 +49,13 @@ class FfiFlutterIme extends FlutterImePlatform {
   /// Switches the IME to English.
   ///
   /// Does nothing if the target window cannot be resolved — for example while
-  /// the app has no window of its own to find. This is a deliberate no-op
-  /// rather than an error: the public API returns no value, and callers wire
-  /// this to focus changes where throwing would be worse than doing nothing.
+  /// the app has no window of its own to find.
+  ///
+  /// **Differs from 2.x.** The native plugin reported failure as a
+  /// `PlatformException`; this reports it by doing nothing. Callers wire these
+  /// to focus changes, where an unhandled async error is worse than a keyboard
+  /// that did not switch. Code that caught the exception will simply stop
+  /// seeing it — nothing breaks, but nothing warns either.
   @override
   Future<void> setEnglishKeyboard() async => _windows.setEnglishKeyboard();
 
@@ -67,9 +71,12 @@ class FfiFlutterIme extends FlutterImePlatform {
   /// Restores a keyboard from a token previously returned by
   /// [getCurrentInputSource].
   ///
-  /// A malformed token is ignored rather than raised: these come back from a
-  /// consumer's own storage, and 2.1.4 fixed a crash where one reached the
-  /// numeric parser and threw.
+  /// **Differs from 2.x**, which raised a `PlatformException` when the token
+  /// was malformed or the layout could not be loaded. Both are silent here.
+  /// Tokens come back from a consumer's own storage and can be stale — the
+  /// saved layout may have been uninstalled since — so a failed restore is an
+  /// expected outcome rather than an exceptional one. 2.1.4 already had to fix
+  /// a crash on this path.
   @override
   Future<void> setInputSource(String sourceId) async =>
       _windows.setInputSource(sourceId);
