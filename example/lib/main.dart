@@ -749,6 +749,9 @@ class _FfiPageState extends State<FfiPage> {
   /// on entry and on demand, not during build.
   String _inputSource = '(not read)';
 
+  /// The answer from the last isEnglishKeyboard(), or null before the first.
+  bool? _english;
+
   /// The token from the last save, awaiting a restore.
   String? _saved;
 
@@ -1018,15 +1021,19 @@ class _FfiPageState extends State<FfiPage> {
         : '(not the FFI instance)');
   }
 
-  Future<void> _checkAndRead() async {
-    await _check();
+  /// Reads the verdict and the keyboard it came from together, so the readout
+  /// and the answer can never disagree on screen.
+  Future<void> _checkEnglish() async {
+    final english = await isEnglishKeyboard();
+    _append('isEnglishKeyboard() -> $english');
+    setState(() => _english = english);
     _readSource();
   }
 
   Future<void> _setEnglishAndRead() async {
     await setEnglishKeyboard();
     _append('setEnglishKeyboard() called');
-    await _checkAndRead();
+    await _checkEnglish();
   }
 
   Future<void> _saveAndRead() async {
@@ -1339,9 +1346,13 @@ class _FfiPageState extends State<FfiPage> {
   /// Separate from the Windows build rather than woven into it with platform
   /// checks: the two platforms have almost nothing in common here. Windows
   /// toggles a conversion mode inside one layout and needs a window handle to
-  /// do it; macOS selects a whole layout and needs no window at all. Only
-  /// setEnglishKeyboard and isEnglishKeyboard are ported on macOS so far, so
-  /// the disable/enable, token and polled-stream sections have nothing to show.
+  /// do it; macOS selects a whole layout and needs no window at all.
+  ///
+  /// Laid out as numbered steps because the operations are only meaningful in
+  /// sequence — a restore means nothing without a save before it and a manual
+  /// switch in between. An earlier version listed the buttons with a paragraph
+  /// of prose each, and it was not possible to tell from the screen what to do
+  /// first.
   Widget _buildMacos(BuildContext context) {
     return SingleChildScrollView(
       padding: const EdgeInsets.all(24),
@@ -1350,143 +1361,91 @@ class _FfiPageState extends State<FfiPage> {
         children: [
           Text('FFI (opt-in) — macOS',
               style: Theme.of(context).textTheme.headlineMedium),
+          const SizedBox(height: 4),
+          Text(
+            'These calls reach Text Input Source Services through dart:ffi. '
+            'Other pages still use the native plugin, so comparing them shows '
+            'what changed.',
+            style: TextStyle(color: Colors.grey[700]),
+          ),
+          const SizedBox(height: 20),
+          _currentSourceCard(context),
+          const SizedBox(height: 28),
+          _step(context, 1, 'Is this an English keyboard?'),
           const SizedBox(height: 8),
-          const Text(
-            'These calls go through dart:ffi to Text Input Source Services '
-            'directly. No method channel and no native plugin code is '
-            'involved. Everything else on this page falls through to the '
-            'native plugin for now.',
-          ),
-          const SizedBox(height: 20),
-          Card(
-            color: Colors.blueGrey[50],
-            child: Padding(
-              padding: const EdgeInsets.all(16),
-              child: Column(
-                crossAxisAlignment: CrossAxisAlignment.start,
-                children: [
-                  const Text('Selected input source',
-                      style: TextStyle(fontWeight: FontWeight.bold)),
-                  const SizedBox(height: 4),
-                  SelectableText(
-                    _inputSource,
-                    style:
-                        const TextStyle(fontFamily: 'monospace', fontSize: 12),
-                  ),
-                  const SizedBox(height: 8),
-                  const Text(
-                    'The first language listed is what decides the answer '
-                    'below. It is read straight from the input source, not '
-                    'guessed from its ID.',
-                    style: TextStyle(fontSize: 12),
-                  ),
-                ],
-              ),
-            ),
-          ),
-          const SizedBox(height: 20),
-          const SizedBox(
-            width: 480,
-            child: TextField(
-              decoration: InputDecoration(
-                border: OutlineInputBorder(),
-                labelText: 'Type here, switch layout with Caps Lock or the '
-                    'menu bar, then check',
-              ),
-            ),
-          ),
-          const SizedBox(height: 16),
-          Wrap(spacing: 12, runSpacing: 8, children: [
+          Row(children: [
             FilledButton.icon(
-              onPressed: _setEnglishAndRead,
-              icon: const Icon(Icons.abc),
-              label: const Text('setEnglishKeyboard()'),
-            ),
-            OutlinedButton.icon(
-              onPressed: _checkAndRead,
+              onPressed: _checkEnglish,
               icon: const Icon(Icons.help_outline),
               label: const Text('isEnglishKeyboard()'),
             ),
-            TextButton(
-              onPressed: () => setState(() => _log = ''),
-              child: const Text('Clear'),
-            ),
+            const SizedBox(width: 16),
+            _verdict(),
           ]),
-          const SizedBox(height: 24),
-          Card(
-            color: Colors.amber[50],
-            child: Padding(
-              padding: const EdgeInsets.all(16),
-              child: Column(
-                crossAxisAlignment: CrossAxisAlignment.start,
-                children: [
-                  const Text('The case 2.x got wrong',
-                      style: TextStyle(fontWeight: FontWeight.bold)),
-                  const SizedBox(height: 8),
-                  const Text(
-                    'In System Settings › Keyboard › Input Sources, add an '
-                    'English layout that is not ABC or U.S. — Dvorak, Colemak, '
-                    'British, Australian or Canadian. Select it, then press '
-                    'isEnglishKeyboard().\n\n'
-                    'It must answer true. 2.x answered false for every one of '
-                    'them, and the "force English" recipe in the README reacts '
-                    'to a false by switching the keyboard — so 2.x dragged '
-                    'those users to ABC every time they focused a password '
-                    'field.\n\n'
-                    'Worth trying the other direction too: ABC — AZERTY types '
-                    'French, and its ID starts with the exact string 2.x '
-                    'matched on. It must answer false.',
-                    style: TextStyle(fontSize: 13),
-                  ),
-                ],
-              ),
-            ),
-          ),
-          const SizedBox(height: 24),
-          Text('Save and restore',
-              style: Theme.of(context).textTheme.titleMedium),
-          const SizedBox(height: 4),
-          const Text(
-            'Save the current input source, switch it by hand from the menu '
-            'bar or with setEnglishKeyboard(), then restore. Try it with a '
-            'non-English source such as a Korean IME — the token is the input '
-            'source ID and its format is unchanged from 2.x, so one saved '
-            'before upgrading still restores.\n\n'
-            'A source you have switched off in System Settings since saving is '
-            'switched back on before being selected. A source you have removed '
-            'outright cannot come back: that restore fails, leaves you on the '
-            'keyboard you are already using, and does not throw.',
+          const SizedBox(height: 8),
+          Text(
+            'Switch layout from the menu bar and press again. Every English '
+            'layout must answer true — Dvorak, Colemak, British, Australian, '
+            'Canadian. ABC — AZERTY types French and must answer false.',
+            style: TextStyle(fontSize: 12, color: Colors.grey[700]),
           ),
           const SizedBox(height: 12),
-          SelectableText(
-            'saved token: ${_saved ?? "(nothing saved)"}',
-            style: const TextStyle(fontFamily: 'monospace', fontSize: 12),
+          OutlinedButton.icon(
+            onPressed: _setEnglishAndRead,
+            icon: const Icon(Icons.abc),
+            label: const Text('setEnglishKeyboard() — switch to ABC'),
           ),
-          const SizedBox(height: 8),
-          Wrap(spacing: 12, runSpacing: 8, children: [
+          const SizedBox(height: 32),
+          _step(context, 2, 'Save a keyboard, then get it back'),
+          const SizedBox(height: 12),
+          _numbered(
+            '1',
+            'Save the keyboard you are on now.',
             FilledButton.tonalIcon(
               onPressed: _saveAndRead,
               icon: const Icon(Icons.bookmark_add_outlined),
               label: const Text('getCurrentInputSource()'),
             ),
+            detail: _saved == null ? null : 'saved: $_saved',
+          ),
+          _numbered(
+            '2',
+            'Switch to a different keyboard from the menu bar. The card at the '
+                'top must change.',
+            null,
+          ),
+          _numbered(
+            '3',
+            'Put the saved one back. The card at the top must return to what '
+                'step 1 saved.',
             OutlinedButton.icon(
               onPressed: _saved == null ? null : _restoreAndRead,
               icon: const Icon(Icons.restore),
               label: const Text('setInputSource(saved)'),
             ),
+          ),
+          const SizedBox(height: 16),
+          _numbered(
+            '!',
+            'A token can name a keyboard that is no longer installed. Nothing '
+                'should happen: no crash, and the card at the top must not move.',
             OutlinedButton.icon(
               onPressed: () =>
                   _restoreUnusable('com.apple.keylayout.NoSuchLayout'),
               icon: const Icon(Icons.bug_report_outlined),
-              label: const Text('restore an uninstalled source'),
+              label: const Text('restore a keyboard that is not installed'),
             ),
-          ]),
-          const SizedBox(height: 24),
+          ),
+          const SizedBox(height: 32),
+          _step(context, 3, 'Does a token saved under 2.x still work?'),
+          const SizedBox(height: 8),
           _tokenCompatibilitySection(context),
-          const SizedBox(height: 16),
+          const SizedBox(height: 32),
+          Text('Call log', style: Theme.of(context).textTheme.titleSmall),
+          const SizedBox(height: 8),
           Container(
             width: double.infinity,
-            constraints: const BoxConstraints(minHeight: 120),
+            constraints: const BoxConstraints(minHeight: 90),
             padding: const EdgeInsets.all(16),
             decoration: BoxDecoration(
               color: Colors.grey[200],
@@ -1495,6 +1454,126 @@ class _FfiPageState extends State<FfiPage> {
             child: SelectableText(
               _log.isEmpty ? '(no calls yet)' : _log,
               style: const TextStyle(fontFamily: 'monospace', fontSize: 12),
+            ),
+          ),
+        ],
+      ),
+    );
+  }
+
+  /// The always-visible readout every step above refers back to.
+  ///
+  /// Deliberately the same widget for all of them: "the card at the top must
+  /// change" is a check anyone can make without knowing what the call returned.
+  Widget _currentSourceCard(BuildContext context) {
+    return Card(
+      color: Colors.blueGrey[50],
+      child: Padding(
+        padding: const EdgeInsets.all(16),
+        child: Row(
+          children: [
+            Expanded(
+              child: Column(
+                crossAxisAlignment: CrossAxisAlignment.start,
+                children: [
+                  Text('Selected keyboard',
+                      style: TextStyle(
+                          fontSize: 12,
+                          fontWeight: FontWeight.bold,
+                          color: Colors.grey[700])),
+                  const SizedBox(height: 6),
+                  SelectableText(
+                    _inputSource,
+                    style: const TextStyle(
+                        fontFamily: 'monospace',
+                        fontSize: 13,
+                        fontWeight: FontWeight.bold),
+                  ),
+                ],
+              ),
+            ),
+            IconButton(
+              onPressed: _readSource,
+              icon: const Icon(Icons.refresh),
+              tooltip: 'Re-read',
+            ),
+          ],
+        ),
+      ),
+    );
+  }
+
+  /// The answer from the last isEnglishKeyboard(), as a verdict rather than a
+  /// log line. Reading true or false off a scrolling log is where the previous
+  /// layout lost people.
+  Widget _verdict() {
+    final english = _english;
+    if (english == null) {
+      return Text('(not checked yet)',
+          style: TextStyle(color: Colors.grey[600]));
+    }
+    return Container(
+      padding: const EdgeInsets.symmetric(horizontal: 16, vertical: 8),
+      decoration: BoxDecoration(
+        color: english ? Colors.green[50] : Colors.orange[50],
+        borderRadius: BorderRadius.circular(8),
+      ),
+      child: Text(
+        english ? 'English  (true)' : 'Not English  (false)',
+        style: TextStyle(
+          fontWeight: FontWeight.bold,
+          color: english ? Colors.green[900] : Colors.orange[900],
+        ),
+      ),
+    );
+  }
+
+  Widget _step(BuildContext context, int number, String title) {
+    return Row(children: [
+      CircleAvatar(
+        radius: 13,
+        backgroundColor: Theme.of(context).colorScheme.primary,
+        child: Text('$number',
+            style: const TextStyle(
+                color: Colors.white,
+                fontWeight: FontWeight.bold,
+                fontSize: 13)),
+      ),
+      const SizedBox(width: 10),
+      Text(title, style: Theme.of(context).textTheme.titleMedium),
+    ]);
+  }
+
+  /// One instruction, its button, and anything the button produced.
+  Widget _numbered(String marker, String instruction, Widget? action,
+      {String? detail}) {
+    return Padding(
+      padding: const EdgeInsets.only(bottom: 12),
+      child: Row(
+        crossAxisAlignment: CrossAxisAlignment.start,
+        children: [
+          SizedBox(
+            width: 24,
+            child: Text(marker,
+                style: TextStyle(
+                    fontWeight: FontWeight.bold, color: Colors.grey[700])),
+          ),
+          Expanded(
+            child: Column(
+              crossAxisAlignment: CrossAxisAlignment.start,
+              children: [
+                Text(instruction),
+                if (action != null) ...[
+                  const SizedBox(height: 8),
+                  action,
+                ],
+                if (detail != null) ...[
+                  const SizedBox(height: 6),
+                  SelectableText(detail,
+                      style: const TextStyle(
+                          fontFamily: 'monospace', fontSize: 12)),
+                ],
+              ],
             ),
           ),
         ],
