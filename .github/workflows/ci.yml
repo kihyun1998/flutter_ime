@@ -23,8 +23,11 @@ jobs:
 
       - run: dart --version
 
+      # `--no-example` because `dart pub get` also resolves `example/`, which is
+      # a Flutter app and cannot resolve without a Flutter SDK. This job
+      # deliberately has none, so without the flag it fails before it starts.
       - name: Install dependencies
-        run: dart pub get
+        run: dart pub get --no-example
 
       # Everything, including the example. Formatting needs no resolved
       # dependencies, so the example is checked here rather than in the jobs
@@ -32,8 +35,12 @@ jobs:
       - name: Format check
         run: dart format --output=none --set-exit-if-changed .
 
+      # Scoped to the package. Analysis *does* need resolved dependencies, and
+      # `example/` is deliberately unresolved here — an unscoped run reports a
+      # few hundred unresolved-import errors from it. The example is analysed by
+      # the jobs that have Flutter.
       - name: Analyze
-        run: dart analyze
+        run: dart analyze lib test
 
       - name: Test
         run: dart test
@@ -105,14 +112,21 @@ jobs:
           channel: stable
           cache: true
 
+      # The example is analysed here rather than in the Dart job, which has no
+      # Flutter SDK and so cannot resolve it. Analysis is platform-independent,
+      # so once is enough — this is the cheapest of the three example jobs.
+      - name: Analyze example
+        working-directory: example
+        run: |
+          flutter pub get
+          flutter analyze
+
       # `dart:ffi` does not exist on web, so a stray unconditional import would
       # break every consumer who also targets web — and nothing else here would
       # catch it. Building the example exercises the real conditional import.
       - name: Build example for web
         working-directory: example
-        run: |
-          flutter pub get
-          flutter build web
+        run: flutter build web
 
   example-windows:
     name: Example (Windows)
