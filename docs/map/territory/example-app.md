@@ -32,5 +32,5 @@ From the source:
 - [Public API](public-api.md) — every page calls the public functions; a signature change breaks the build.
 
 ## Known holes / open
-- **`plugin_integration_test.dart` is stale** (maintainer, 2026-10-24): it expects `setInputSource('deadbeef:not-a-number:0')` to throw `PlatformException`, which 3.0.0 made silent, and it expects `setEnglishKeyboard` to make `isEnglishKeyboard` true, which macOS does not guarantee when ABC is not enabled. CI does not run it.
-- `MacosIme.describeCurrentInputSource` and `WindowResolution` are documented as feeding this app, but it stopped using them in `8397162`; `describeCurrentInputSource` is now reachable only from tests.
+- **`plugin_integration_test.dart` is stale** (maintainer, 2026-10-24): it expects `setInputSource('deadbeef:not-a-number:0')` to throw `PlatformException`, which 3.0.0 made silent, and it expects `setEnglishKeyboard` to make `isEnglishKeyboard` true, which macOS does not guarantee when ABC is not enabled. CI does not run it. Tracked: #29
+- `MacosIme.describeCurrentInputSource` and `WindowResolution` are documented as feeding this app, but it stopped using them in `8397162`; `describeCurrentInputSource` is now reachable only from tests. Tracked: #30

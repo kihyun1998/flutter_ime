@@ -11,6 +11,7 @@ From the source:
 - **Windows** calls `ImmSetConversionStatus(context, IME_CMODE_ALPHANUMERIC, IME_SMODE_NONE)` on the resolved window's context, and does nothing when there is no window or no context (`WindowsIme.setEnglishKeyboard`).
 - **macOS targets `com.apple.keylayout.ABC` only, and only among enabled sources** (`_selectInputSourceById(..., includeUnenabled: false)`). Selecting ABC for someone who never enabled it would add a keyboard to their input menu; restoring a token is different and widens the search — see [input-source token](input-source-token.md) (`MacosIme.setEnglishKeyboard` doc).
 - **ABC rather than "whichever English layout is installed"**, matching 2.x; a Dvorak user is not pushed here because classification already calls Dvorak English (`_englishInputSourceId` doc).
+- **On Windows the switch also applies to a foreground-window guess**, by decision: conversion state is transient and self-correcting, unlike an IME detach (#23; `_isOwnWindow` doc).
 - **Enable runs before select on both paths**; enabling an already-enabled source is a no-op, which is why the narrow caller shares the path (`_selectInputSourceById`).
 
 ## Code
@@ -30,5 +31,4 @@ From the source:
 - [Window resolution](window-resolution.md) — the Windows switch acts on the resolved window, including a foreground-window guess.
 
 ## Known holes / open
-- On Windows the switch is applied to a foreground-window guess too (only disable/enable refuse one — see [IME disable](ime-disable.md)). The source calls conversion state "transient and self-correcting" (`_isOwnWindow` doc); nothing records whether switching another application's IME mode that way was considered acceptable or merely tolerated.
 - A macOS user with no ABC enabled gets no switch at all, silently.

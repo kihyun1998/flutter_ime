@@ -18,7 +18,7 @@ reads hand-written notes as leads and keeps their paths.
 
 ## The repo in one paragraph
 
-`flutter_ime` is a plain Dart package, without Flutter, that controls the IME on Windows and macOS through `dart:ffi`. Nine public functions gate on the platform, then dispatch to a Windows backend (IMM32 and user32 against the app's own window) or a macOS backend (Text Input Source Services, CoreFoundation and CoreGraphics). Every interpretation lives in a pure function, and every change stream in one shared class, so all of it is tested with fakes. What nothing tests is the bindings against a real OS: CI builds the example and never runs it ([native bindings](territory/native-bindings.md), [CI](territory/ci.md)). That is the largest gap.
+`flutter_ime` is a plain Dart package, without Flutter, that controls the IME on Windows and macOS through `dart:ffi`. Nine public functions gate on the platform, then dispatch to a Windows backend (IMM32 and user32 against the app's own window) or a macOS backend (Text Input Source Services, CoreFoundation and CoreGraphics). Every interpretation lives in a pure function, and every change stream in one shared class, so all of it is tested with fakes. What no automated check covers is the bindings against a real OS: that is a manual pre-release pass on the example app, by design (#11) ([native bindings](territory/native-bindings.md), [CI](territory/ci.md)). That is the largest gap.
 
 ## Territories
 
