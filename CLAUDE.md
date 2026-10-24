@@ -4,14 +4,8 @@ A comment says what the code is. Why it is this way, what it deliberately leaves
 
 ## Agent skills
 
-### Issue tracker
-
-Issues live in this repo's GitHub Issues (`kihyun1998/flutter_ime`), managed via the `gh` CLI. External pull requests are **not** a triage surface. See `docs/agents/issue-tracker.md`.
-
-### Triage labels
-
-Uses the five canonical triage labels unchanged (`needs-triage`, `needs-info`, `ready-for-agent`, `ready-for-human`, `wontfix`). See `docs/agents/triage-labels.md`.
-
-### Domain docs
-
-Single-context layout — one `GLOSSARY.md` + `docs/adr/` at the repo root. See `docs/agents/domain.md`.
+| Before you… | Read |
+|---|---|
+| read, file, or label an issue | `docs/agents/issue-tracker.md` |
+| apply a triage label | `docs/agents/triage-labels.md` |
+| name a domain concept, or decide something an ADR may cover | `docs/agents/domain.md` |
