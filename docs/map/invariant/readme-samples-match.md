@@ -18,4 +18,4 @@ A README sample that no longer compiles against the current API, while CI stays 
 - `example/lib/readme_examples.dart` header, added with the 3.0.0 docs rewrite (commit `8417bf9`, 2026-07-23).
 
 ## Where it will recur
-Any edit to a fenced `dart` block in `README.md`, or to `readme_examples.dart`: the other file needs the same edit. Diff the two by hand. No check compares them.
+Any edit to a fenced `dart` block in `README.md`, or to `readme_examples.dart`: the other file needs the same edit. Diff the two by hand. No check compares them. Tracked: #31

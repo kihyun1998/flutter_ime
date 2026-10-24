@@ -11,7 +11,7 @@ From the source:
 - **Precedence: the `FLUTTERVIEW` child of this process's `FLUTTER_RUNNER_WIN32_WINDOW`, then the runner window itself, then the foreground window, then none** (`WindowResolver._search`). The two class names were confirmed by enumerating a running example app (`kFlutterRunnerWindowClass` doc).
 - **The top-level search filters by process id**, because another Flutter app has windows of the same class (`_Win32WindowCalls.findOwnTopLevel`).
 - **Cached, and revalidated with `IsWindow` on every access**, since a recreated window leaves a stale handle (`WindowResolver.resolve`).
-- **A foreground-window result is never cached** — it is a guess, and caching it would pin every later call to whatever was focused then (`resolve`). It is still returned and used by every operation except IME detach — see [IME disable](ime-disable.md).
+- **A foreground-window result is never cached** — it is a guess, and caching it would pin every later call to whatever was focused then (`resolve`). It is still returned and used by every operation except IME detach — see [IME disable](ime-disable.md). That is decided: conversion state is transient and a wrong window self-corrects, while a detach does not (#23). A plain Dart CLI has no runner window, so on Windows its calls always take that fallback.
 - **One resolve per operation**, so the layout and the conversion state of one call come from one window (`WindowsIme._withImeContext` doc).
 - **Lookups are injected callbacks**, so precedence and caching are tested without an OS (library doc).
 
@@ -33,6 +33,5 @@ From the source:
 - [Example app](example-app.md) — the runner's class names come from the example's runner; a Flutter runner that renames them sends every call to the foreground fallback.
 
 ## Known holes / open
-- **A plain Dart CLI on Windows has no runner window**, so every operation falls to the foreground window — another process's — except IME detach. The README says the package works from a plain Dart program; nothing records what Windows operations mean there.
-- `WindowResolution` and `WindowsIme.resolveWindow` are documented as "exposed so the example app can show it", but the example app no longer uses either (removed with the FFI page in `8397162`); only `test/window_resolver_test.dart` reads `source`.
+- `WindowResolution` and `WindowsIme.resolveWindow` are documented as "exposed so the example app can show it", but the example app no longer uses either (removed with the FFI page in `8397162`); only `test/window_resolver_test.dart` reads `source`. Tracked: #30
 - The runner class names depend on Flutter's Windows runner template and are not pinned to any Flutter version.

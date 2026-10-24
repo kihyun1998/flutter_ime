@@ -30,5 +30,5 @@ From `.github/workflows/ci.yml`:
 - [Example app](example-app.md) — three jobs build it; a change that breaks its Flutter resolution breaks them.
 
 ## Known holes / open
-- **Nothing runs on a real Windows or macOS session.** Every OS-touching path is covered only by fakes ([native bindings](native-bindings.md)); `example/integration_test/` is not run.
+- **Nothing runs on a real Windows or macOS session.** Every OS-touching path is covered only by fakes ([native bindings](native-bindings.md)); `example/integration_test/` is not run. The real-OS check is a manual pre-release pass on the example app, by design (#11).
 - The plain-Dart consumer never subscribes to a stream, so "a CLI that listens and cancels can exit" is verified only by hand (commit `8397162` message).

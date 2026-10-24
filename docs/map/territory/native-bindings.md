@@ -32,4 +32,4 @@ From the source:
 - [macOS input-source observer](macos-input-source-observer.md) — the notification name's dereference and the callback signature live here.
 
 ## Known holes / open
-- **No test exercises a real binding.** Every test injects fakes; a signature mismatch against the SDK headers is caught only by running on the OS (manually, or not at all — CI builds the example but never runs it).
+- **No test exercises a real binding.** Every test injects fakes; a signature mismatch against the SDK headers is caught only by running on the OS. That is by design: the example app is to exercise every public function on real Windows and macOS before release (#11, "Verification the unit tests deliberately do not cover"). Nothing records that pass per release beyond the issues that ran it (#23).
